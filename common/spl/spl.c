@@ -346,6 +346,34 @@ static int boot_from_devices(struct spl_image_info *spl_image,
 	return -ENODEV;
 }
 
+#if !(defined(CONFIG_SYS_ICACHE_OFF) && defined(CONFIG_SYS_DCACHE_OFF)) && \
+		defined(CONFIG_ARM)
+static int reserve_mmu(void)
+{
+	phys_addr_t ram_top = 0;
+	/* reserve TLB table */
+	gd->arch.tlb_size = PGTABLE_SIZE;
+
+#ifdef CONFIG_SYS_SDRAM_BASE
+	ram_top = CONFIG_SYS_SDRAM_BASE;
+#endif
+	ram_top += get_effective_memsize();
+	gd->arch.tlb_addr = ram_top - gd->arch.tlb_size;
+	debug("TLB table from %08lx to %08lx\n", gd->arch.tlb_addr,
+	      gd->arch.tlb_addr + gd->arch.tlb_size);
+	return 0;
+}
+
+__weak void dram_init_banksize(void)
+{
+#if defined(CONFIG_NR_DRAM_BANKS) && defined(CONFIG_SYS_SDRAM_BASE)
+	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
+	gd->bd->bi_dram[0].size = get_effective_memsize();
+#endif
+}
+
+#endif
+
 void board_init_r(gd_t *dummy1, ulong dummy2)
 {
 	u32 spl_boot_list[] = {
@@ -361,6 +389,13 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 	gd->bd = &bdata;
 #ifdef CONFIG_SPL_OS_BOOT
 	dram_init_banksize();
+#endif
+
+#if !(defined(CONFIG_SYS_ICACHE_OFF) && defined(CONFIG_SYS_DCACHE_OFF)) && \
+		defined(CONFIG_ARM)
+	dram_init_banksize();
+	reserve_mmu();
+	enable_caches();
 #endif
 
 #if defined(CONFIG_SYS_SPL_MALLOC_START)
@@ -395,6 +430,11 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 		puts("SPL: failed to boot from all boot devices\n");
 		hang();
 	}
+
+#if !(defined(CONFIG_SYS_ICACHE_OFF) && defined(CONFIG_SYS_DCACHE_OFF)) && \
+		defined(CONFIG_ARM)
+	cleanup_before_linux();
+#endif
 
 	switch (spl_image.os) {
 	case IH_OS_U_BOOT:
