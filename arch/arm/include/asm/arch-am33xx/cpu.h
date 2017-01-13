@@ -74,6 +74,29 @@
 #define PRM_RSTCTRL_RESET		0x01
 #define PRM_RSTST_WARM_RESET_MASK	0x232
 
+/*
+ * Watchdog:
+ * Using the prescaler, the OMAP watchdog could go for many
+ * months before firing.  These limits work without scaling,
+ * with the 60 second default assumed by most tools and docs.
+ */
+#define TIMER_MARGIN_MAX	(24 * 60 * 60)	/* 1 day */
+#define TIMER_MARGIN_DEFAULT	60	/* 60 secs */
+#define TIMER_MARGIN_MIN	1
+
+#define PTV			0	/* prescale */
+#define GET_WLDR_VAL(secs)	(0xffffffff - ((secs) * (32768/(1<<PTV))) + 1)
+#define WDT_WWPS_PEND_WCLR	BIT(0)
+#define WDT_WWPS_PEND_WLDR	BIT(2)
+#define WDT_WWPS_PEND_WTGR	BIT(3)
+#define WDT_WWPS_PEND_WSPR	BIT(4)
+
+#define WDT_WCLR_PRE		BIT(5)
+#define WDT_WCLR_PTV_OFF	2
+
+/* EMIF Control register bits */
+#define EMIF_CTRL_DEVOFF	BIT(0)
+
 #ifndef __KERNEL_STRICT_NAMES
 #ifndef __ASSEMBLY__
 #include <asm/ti-common/omap_wdt.h>
@@ -392,8 +415,19 @@ struct cm_device_inst {
 };
 
 struct prm_device_inst {
-	unsigned int prm_rstctrl;
-	unsigned int prm_rstst;
+	unsigned int rstctrl;
+	unsigned int rstst;
+	unsigned int rsttime;
+	unsigned int sram_count;
+	unsigned int ldo_sram_core_set;	/* offset 0x10 */
+	unsigned int ldo_sram_core_ctr;
+	unsigned int ldo_sram_mpu_setu;
+	unsigned int ldo_sram_mpu_ctrl;
+	unsigned int io_count;		/* offset 0x20 */
+	unsigned int io_pmctrl;
+	unsigned int vc_val_bypass;
+	unsigned int resv1;
+	unsigned int emif_ctrl;		/* offset 0x30 */
 };
 
 struct cm_dpll {
