@@ -121,6 +121,13 @@ endif
 
 if AM43XX
 
+config SPL_RTC_ONLY_SUPPORT
+	bool
+	depends on SPL
+	prompt "Enable RTC ONLY Support"
+	help
+	  If you want RTC ONLY Support, say Y.
+
 config TARGET_AM43XX_EVM
 	bool "Support am43xx_evm"
 	select BOARD_LATE_INIT
