@@ -109,6 +109,80 @@
 			clock-names = "fck";
 			bus_freq	= <2500000>;
 		};
+
+		rapidio: rapidio@2900000 {
+			compatible = "ti,keystone-rapidio";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			reg = <0x2900000 0x40000>,    /* rio regs */
+			      <0x2620000 0x1000>,     /* boot config regs */
+			      <0x232c000 0x2000>;     /* serdes config regs */
+			reg-names = "rio", "boot_config", "serdes";
+			clocks = <&clksrio>;
+			clock-names = "clk_srio";
+			dma-coherent;
+
+			ti,navigator-dmas = <&dma_srio 18>,
+					    <&dma_srio 19>,
+					    <&dma_srio 0>,
+					    <&dma_srio 1>;
+			ti,navigator-dma-names = "riorx0", "riorx1",
+						 "riotx0", "riotx1";
+
+			keystone2-serdes;
+			baudrate  = <3>;              /* 5 Gbps */
+			path-mode = <4>;              /* 1 port in 4x */
+			port-register-timeout = <30>; /* 30 seconds */
+
+			lsu = <0 0>;    /* available LSU range (start end) */
+			num-dio-channels = <8>; /* number of DIO DMA channels */
+
+			ports = <0x1>;      /* bitfield of port(s) to probe */
+
+			dev-id-size = <0>;  /* RapidIO common transport system
+					     * size.
+					     * 0 - Small size. 8-bit deviceID
+					     *     fields. 256 devices.
+					     * 1 - Large size, 16-bit deviceID
+					     *     fields. 65536 devices.
+					     */
+
+			interrupts = <0 152 0xf01
+				      0 153 0xf01>; /* RIO and LSU IRQs */
+
+			num-mboxes = <2>;
+
+			mbox-0 {
+				rx-channel = "riorx0";
+				rx-pool = <128 15>; /* size region_id */
+				rx-queue-depth  = <256 0 0 0>;
+				rx-buffer-size  = <4096 0 0 0>;
+				/*rx-queue = <8714>;*/
+				/*stream-id = <0>;*/
+				tx-channel = "riotx0";
+				tx-pool = <128 15>;
+				tx-queue-depth = <256>;
+				tx-queue = <672>; /* for channel 0 */
+				/*tx-completion-queue = <8716>;*/
+				/*tx-garbage-queue = <8717>;*/
+			};
+
+			mbox-1 {
+				rx-channel = "riorx1";
+				rx-pool = <128 15>;
+				rx-queue-depth  = <256 0 0 0>;
+				rx-buffer-size  = <4096 0 0 0>;
+				/*rx-queue = <8715>;*/
+				/*stream-id = <1>;*/
+				tx-channel = "riotx1";
+				tx-pool = <128 15>;
+				tx-queue-depth = <256>;
+				tx-queue = <673>; /* for channel 1 */
+				/*tx-completion-queue = <8718>;*/
+				/*tx-garbage-queue = <8719>;*/
+			};
+		};
+
 		/include/ "keystone-k2hk-netcp.dtsi"
 	};
 };

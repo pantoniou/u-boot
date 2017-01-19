@@ -119,6 +119,16 @@ knav_dmas: knav_dmas@0 {
 		reg-names = "global", "txchan", "rxchan",
 				"txsched", "rxflow";
 	};
+
+	dma_srio: dma_srio@0 {
+		reg = <0x2901000 0x020>,
+			<0x2901400 0x200>,
+			<0x2901800 0x200>,
+			<0x2901c00 0x200>,
+			<0x2902000 0x280>;
+		reg-names = "global", "txchan", "rxchan",
+				"txsched", "rxflow";
+	};
 };
 
 netcp: netcp@2000000 {
