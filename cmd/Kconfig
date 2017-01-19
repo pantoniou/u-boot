@@ -714,6 +714,12 @@ config CMD_FDC
 	help
 	  The 'fdtboot' command allows booting an image from a floppy disk.
 
+config CMD_RIO
+	bool "rapidio"
+	select DM_RIO
+	help
+	  RapidIO support.
+
 endmenu
 
 

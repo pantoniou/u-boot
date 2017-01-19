@@ -144,6 +144,7 @@ obj-$(CONFIG_CMD_ZFS) += zfs.o
 obj-$(CONFIG_CMD_DFU) += dfu.o
 obj-$(CONFIG_CMD_GPT) += gpt.o
 obj-$(CONFIG_CMD_ETHSW) += ethsw.o
+obj-$(CONFIG_CMD_RIO) += rio.o
 
 # Power
 obj-$(CONFIG_CMD_PMIC) += pmic.o
