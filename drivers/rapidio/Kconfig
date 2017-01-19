@@ -12,3 +12,9 @@ config DM_RIO
 	  the RapidIO uclass. Drivers provide methods to query the
 	  particular RapidIO devices that they support. The uclass
 	  interface is defined in include/rio.h.
+
+config KEYSTONE_RIO
+	bool "Support for TI KeyStone RapidIO"
+	depends on TARGET_K2HK_EVM && DM_RIO
+        help
+	  Say Y here if you want to use RapidIO to boot your board.

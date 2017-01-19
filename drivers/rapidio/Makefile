@@ -6,3 +6,4 @@
 #
 
 obj-$(CONFIG_DM_RIO) += rio-uclass.o
+obj-$(CONFIG_KEYSTONE_RIO) += keystone_rio.o
