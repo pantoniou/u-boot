@@ -1,0 +1,152 @@
+                         RapidIO support for TI KeyStone devices
+                         =======================================
+
+
+This feature allows to boot a device through RapidIO using DirectIO (DIO).
+A new set of commands is added to U-Boot for this purpose.
+
+This feature is today designed to work with Texas Instruments KeyStone
+devices but may easily be extended to work on different architectures.
+
+How it works
+------------
+
+This boot mechanism uses the DIO functionality which allows a remote
+device to directly read from and write into the device's address space
+(basically the DDR or any mapped memory such as MSM).
+
+The boot sequence is pretty simple. The RIO driver probe initializes the
+RapidIO controller. Then the remote link partner can push the various
+images (kernel, fdt, ... etc.) into their respective locations on the
+local device through DirectIO while the local U-boot is waiting for a
+signal that the push is done. When the local U-Boot receives such a signal
+it can then start the kernel normally like with any other boot mechanism.
+
+It is the link partner's responsability to push the various images into the
+proper location of the local device's memory.
+
+The wait/signal in the image pushing process is done by the RapidIO doorbell.
+Use the 'rio doorbell_rx <info>' U-Boot command to wait
+for a 16-bit doorbell info. The link partner has only to send the expected
+16-bit doorbell info value when it has finished pushing all images.
+
+Basically the sequence should be as follows (A is the device to be booted,
+B is the link partner device which pushes the images to boot):
+
+ [B]: board is up and booted, RapidIO controller is initialized but not the link
+ [A]: board is powered on, entering U-Boot
+ [A]: U-Boot probes the RapidIO device driver, configures the local RapidIO
+      controller and hardware waits the link establishement
+ [B]: Linux kernel starts the RapidIO link configuration and eventually the
+      RapidIO enumeration/discovery process (see Linux kernel RapidIO subsytem
+      driver for more information)
+ [AB]: RapidIO link is now established between the two link partners
+ [A]: the 'rio doorbell_rx <info>' command is called and wait for doorbell
+ [B]: pushes the kernel image using DIO to pre-defined location
+ [B]: pushes the dtb image using DIO to pre-defined location
+ [B]: pushes the skern image using DIO to pre-defined location
+ [B]: (depends on bootmode) pushes the filesystem image using DIO to
+      pre-defined location
+ [B]: sends doorbell to [A] to signify end of pushing images
+ [A]: U-Boot receives the doorbell and exits the 'rio doorbell_rx' cmd
+ [A}: issue 'rio shutdown' command to power off rapidio
+ [A]: skern, fdt and kernel can be installed and started normally with the
+      'mon_install' and 'bootm' U-Boot commands
+
+RapidIO subsystem commands
+--------------------------
+
+ - rio devices:
+   This command is used to probe and show the RapidIO devices (with U-Boot
+   assigned device numbers devnum) available.  Corresponding drivers initialize
+   the respective RapidIO controlller while being probed.  It is not necessary
+   to run this command in order to have the device driver probed.  Following
+   commands also triggers probes to the devices.
+
+The <devnum> in the following commands designates the RapidIO device to
+execute the command.  If there is only one RapidIO device in the system,
+then the devnum must be 0.
+
+ - rio doorbell_rx <devnum> <info>:
+   Blocking wait for receiving 16-bit doorbell <info>.
+   (<info> is implementation specific).
+
+ - rio remove <devnum>:
+   Disables the RapidIO controller.
+
+ - rio r <devnum> port dst_id hopcount offset:
+   This command allows to read the remote RapidIO configuration space by
+   performing a maintenance read request.
+
+ - rio w <devnum> port dst_id hopcount offset value:
+   This command allows to write into the remote RapidIO configuration
+   space by performing a maintenance write request.
+
+ - rio lr <devnum> offset:
+   This performs a local RapidIO configuration space read.
+
+ - rio lw <devnum> offset value:
+   This performs a local RapidIO configuration space write.
+
+Device support
+--------------
+
+The RapidIO controller of the KeyStone devices is supported through the
+drivers/rapidio/keystone_rio.c device driver.
+
+The RapidIO driver must conform to the rio-uclass requirements, namely,
+implements probe(), remove() and the APIs specified in struct rio_ops.
+
+Booting with RapidIO
+--------------------
+
+Example of RapidIO booting with U-Boot:
+
+=> rio devices
+RapidIO uclass entries:
+devnum    device             driver
+  0       rapidio@2900000    rio_keystone
+=> rio doorbell_rx 0 0xffff
+keystone_rio_doorbell_rx: waiting for dbell any ...
+received dbell[0] status: 0x00000001
+=> rio remove 0
+=> mon_install ${addr_mon}
+## installed monitor, freq [200000000], status 0
+=> bootm ${addr_kern} ${addr_uninitrd} ${addr_fdt}
+Kernel image @ 0x82000000 [ 0x000000 - 0x400fc0 ]
+## Flattened Device Tree blob at 88000000
+   Booting using the fdt blob at 0x88000000
+   Loading Device Tree to 8fff4000, end 8ffff518 ... OK
+
+Starting kernel ...
+
+-----
+
+Here is an Linux example that uses the riot utility and the mport_cdev
+feature to boot a remote device.  The remote device uses the U-Boot
+RapidIO booting mechanism (like the example above):
+
+./riot -f k2hk_fs.cpio.gz -D 1 -A 0x88080000
+./riot -f k2hk-evm.dtb -D 1 -A 0x88000000
+./riot -f skern-k2hk.bin -D 1 -A 0x0c5f0000
+./riot -f zImage -D 1 -A 0x82000000
+./riot -L 0x00 -D 1
+
+where -f: image file, -D: destid, -A: remote mem addr, -L: doorbell info
+
+This will push the various images and notify U-Boot.
+
+-----
+
+Example of (local and remote) read/write commands:
+
+K2HK EVM # rio r 0 0 -1 1 0x0
+00000000: b9810030                               0...
+K2HK EVM # rio r 0 0 -1 1 0x4
+00000004: 00000000                               ....
+K2HK EVM # rio r 0 0 -1 1 0x8
+00000008: 00000030                               0...
+K2HK EVM # rio lr 0 0
+00000000: b9810030                               0...
+K2HK EVM # rio lr 0 8
+00000008: 00000030                               0...
