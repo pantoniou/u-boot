@@ -64,6 +64,8 @@ source "drivers/pwm/Kconfig"
 
 source "drivers/ram/Kconfig"
 
+source "drivers/rapidio/Kconfig"
+
 source "drivers/remoteproc/Kconfig"
 
 source "drivers/reset/Kconfig"

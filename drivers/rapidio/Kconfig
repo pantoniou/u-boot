@@ -1,0 +1,14 @@
+#
+# RapidIO infrastructure and drivers
+#
+
+config DM_RIO
+	bool "Enable Driver Model for RapidIO drivers"
+	depends on DM
+	default n
+	help
+	  Enable driver model for RapidIO access. The standard RapidIO
+	  interface (rio_config_read(), etc.) is then implemented by
+	  the RapidIO uclass. Drivers provide methods to query the
+	  particular RapidIO devices that they support. The uclass
+	  interface is defined in include/rio.h.
