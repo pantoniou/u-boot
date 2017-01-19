@@ -274,7 +274,7 @@
 	"get_mon_ubi=ubifsload ${addr_mon} ${bootdir}/${name_mon}\0"		\
 	"get_uboot_net=dhcp ${loadaddr} ${tftp_root}/${name_uboot}\0"	\
 	"get_uboot_nfs=nfs ${loadaddr} ${nfs_root}/boot/${name_uboot}\0" \
-	"burn_uboot_spi=sf probe; sf erase 0 0x80000; "		\
+	"burn_uboot_spi=sf probe; sf erase 0 0x90000; "		\
 		"sf write ${loadaddr} 0 ${filesize}\0"		\
 	"burn_uboot_nand=nand erase 0 0x100000; "			\
 		"nand write ${loadaddr} 0 ${filesize}\0"		\
