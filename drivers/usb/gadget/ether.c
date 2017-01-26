@@ -2014,7 +2014,6 @@ static int eth_bind(struct usb_gadget *gadget)
 	struct usb_ep		*in_ep, *out_ep, *status_ep = NULL;
 	int			status = -ENOMEM;
 	int			gcnum;
-	u8			tmp[7];
 #ifdef CONFIG_DM_ETH
 	struct eth_pdata	*pdata = dev_get_platdata(l_priv->netdev);
 #endif
@@ -2218,7 +2217,6 @@ autoconf_fail:
 	dev->out_ep = out_ep;
 	dev->status_ep = status_ep;
 
-	memset(tmp, 0, sizeof(tmp));
 	/*
 	 * Module params for these addresses should come from ID proms.
 	 * The host side address is used with CDC and RNDIS, and commonly
@@ -2228,10 +2226,8 @@ autoconf_fail:
 	 */
 #ifndef CONFIG_DM_ETH
 	get_ether_addr(dev_addr, dev->net->enetaddr);
-	memcpy(tmp, dev->net->enetaddr, sizeof(dev->net->enetaddr));
 #else
 	get_ether_addr(dev_addr, pdata->enetaddr);
-	memcpy(tmp, pdata->enetaddr, sizeof(pdata->enetaddr));
 #endif
 
 	get_ether_addr(host_addr, dev->host_mac);
