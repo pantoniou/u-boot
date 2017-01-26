@@ -14,6 +14,7 @@
 #include <dm/device-internal.h>
 #include <dm/lists.h>
 
+#include <watchdog.h>
 #include <asm/io.h>
 #include <asm/omap_musb.h>
 #include "musb_uboot.h"
@@ -142,6 +143,106 @@ static int ti_musb_ofdata_to_platdata(struct udevice *dev)
 	return 0;
 }
 
+static struct musb *gadget;
+
+int usb_gadget_handle_interrupts(int index)
+{
+	WATCHDOG_RESET();
+	if (!gadget || !gadget->isr)
+		return -EINVAL;
+
+	return gadget->isr(0, gadget);
+}
+
+int usb_gadget_register_driver(struct usb_gadget_driver *driver)
+{
+	int ret;
+
+	if (!driver || driver->speed < USB_SPEED_FULL || !driver->bind ||
+	    !driver->setup) {
+		printf("Bad parameter.\n");
+		return -EINVAL;
+	}
+
+	if (!gadget) {
+		printf("Controller uninitialized\n");
+		return -ENXIO;
+	}
+
+	ret = musb_gadget_start(&gadget->g, driver);
+	if (ret < 0)
+		return ret;
+
+	ret = driver->bind(&gadget->g);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
+{
+	if (driver->disconnect)
+		driver->disconnect(&gadget->g);
+	if (driver->unbind)
+		driver->unbind(&gadget->g);
+	return 0;
+}
+
+static int ti_musb_peripheral_usb_probe(struct udevice *dev)
+{
+	struct ti_musb_platdata *platdata = dev_get_platdata(dev);
+	struct usb_bus_priv *priv = dev_get_uclass_priv(dev);
+	struct omap_musb_board_data *otg_board_data;
+
+	otg_board_data = &platdata->otg_board_data;
+
+	gadget = musb_init_controller(&platdata->plat,
+				      (struct device *)otg_board_data,
+				      platdata->base);
+	if (!gadget) {
+		error("gadget init failed\n");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int ti_musb_peripheral_remove(struct udevice *dev)
+{
+	musb_stop(gadget);
+
+	return 0;
+}
+
+static int ti_musb_peripheral_ofdata_to_platdata(struct udevice *dev)
+{
+	struct ti_musb_platdata *platdata = dev_get_platdata(dev);
+	const void *fdt = gd->fdt_blob;
+	int node = dev->of_offset;
+	int ret;
+
+	ret = ti_musb_ofdata_to_platdata(dev);
+	if (ret) {
+		error("platdata dt parse error\n");
+		return ret;
+	}
+
+	platdata->plat.mode = MUSB_PERIPHERAL;
+
+	return 0;
+}
+
+U_BOOT_DRIVER(ti_musb_peripheral) = {
+	.name	= "ti-musb-peripheral",
+	.id	= UCLASS_USB_DEV_GENERIC,
+	.ofdata_to_platdata = ti_musb_peripheral_ofdata_to_platdata,
+	.probe = ti_musb_peripheral_usb_probe,
+	.remove = ti_musb_peripheral_remove,
+	.platdata_auto_alloc_size = sizeof(struct ti_musb_platdata),
+	.priv_auto_alloc_size = sizeof(struct musb),
+};
+
 static int ti_musb_host_probe(struct udevice *dev)
 {
 	struct musb_host_data *host = dev_get_priv(dev);
@@ -222,7 +323,15 @@ static int ti_musb_wrapper_bind(struct udevice *parent)
 		dr_mode = usb_get_dr_mode(node);
 		switch (dr_mode) {
 		case USB_DR_MODE_PERIPHERAL:
+		case USB_DR_MODE_OTG:
 			/* Bind MUSB device */
+			ret = device_bind_driver_to_node(parent,
+							 "ti-musb-peripheral",
+							 name, node, &dev);
+			if (ret) {
+				error("musb - not able to bind usb device node\n");
+				return ret;
+			}
 			break;
 		case USB_DR_MODE_HOST:
 			/* Bind MUSB host */
