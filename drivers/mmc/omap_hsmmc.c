@@ -101,6 +101,7 @@ struct omap_hsmmc_data {
 	/* when it exists it's copied (otherwise all 0s) */
 	uint hl_hwinfo;
 	int node;
+	char *version;
 #ifdef CONFIG_IODELAY_RECALIBRATION
 	struct omap_hsmmc_pinctrl_state *default_pinctrl_state;
 	struct omap_hsmmc_pinctrl_state *hs_pinctrl_state;
@@ -1517,19 +1518,27 @@ err_pinctrl_state:
 	return 0;
 }
 
-#define OMAP_HSMMC_SETUP_PINCTRL(capmask, mode)			\
-	do {							\
-		struct omap_hsmmc_pinctrl_state *s;			\
-		if (!(cfg->host_caps & capmask))		\
-			break;					\
-								\
-		s = omap_hsmmc_get_pinctrl_by_mode(mmc, #mode);	\
-		if (!s) {					\
-			printf("no pinctrl for %s\n", #mode);	\
-			cfg->host_caps &= ~(capmask);		\
+#define OMAP_HSMMC_SETUP_PINCTRL(capmask, mode)				\
+	do {								\
+		struct omap_hsmmc_pinctrl_state *s = NULL;		\
+		char str[20];						\
+		if (!(cfg->host_caps & capmask))			\
+			break;						\
+									\
+		if (priv->version) {					\
+			sprintf(str, "%s-%s", #mode, priv->version);	\
+			s = omap_hsmmc_get_pinctrl_by_mode(mmc, str);	\
+		}							\
+									\
+		if (!s)							\
+			s = omap_hsmmc_get_pinctrl_by_mode(mmc, #mode);	\
+									\
+		if (!s) {						\
+			printf("no pinctrl for %s\n", #mode);		\
+			cfg->host_caps &= ~(capmask);			\
 		} else {						\
-			priv->mode##_pinctrl_state = s;		\
-		}						\
+			priv->mode##_pinctrl_state = s;			\
+		}							\
 	} while (0)
 
 static int omap_hsmmc_get_pinctrl_state(struct mmc *mmc)
@@ -1623,8 +1632,12 @@ static int omap_hsmmc_platform_fixup(struct mmc *mmc)
 	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
 	struct mmc_config *cfg = &priv->cfg;
 
-	if (platform_fixup_disable_uhs_mode())
+	priv->version = NULL;
+
+	if (platform_fixup_disable_uhs_mode()) {
+		priv->version = "rev11";
 		cfg->host_caps &= ~MMC_MODE_HS200;
+	}
 
 	return 0;
 }
