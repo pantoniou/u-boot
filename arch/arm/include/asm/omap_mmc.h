@@ -33,7 +33,9 @@ struct hsmmc {
 	unsigned int sysstatus;		/* 0x14 */
 	unsigned char res2[0x14];
 	unsigned int con;		/* 0x2C */
-	unsigned char res3[0xD4];
+	unsigned int pwcnt;		/* 0x30 */
+	unsigned int dll;		/* 0x34 */
+	unsigned char res3[0xcc];
 	unsigned int blk;		/* 0x104 */
 	unsigned int arg;		/* 0x108 */
 	unsigned int cmd;		/* 0x10C */
@@ -50,6 +52,7 @@ struct hsmmc {
 	unsigned char res4[0x4];
 	unsigned int ac12;		/* 0x13C */
 	unsigned int capa;		/* 0x140 */
+	unsigned int capa2;		/* 0x144 */
 };
 
 struct omap_hsmmc_plat {
@@ -158,6 +161,8 @@ struct omap_hsmmc_plat {
 #define IOV_3V0				3000000
 #define IOV_1V8				1800000
 
+#define AC12_V1V8_SIGEN		(1 << 19)
+#define AC12_SCLK_SEL		(1 << 23)
 #define AC12_UHSMC_MASK			(7 << 16)
 #define AC12_UHSMC_SDR104		(3 << 16)
 #define AC12_UHSMC_RES			(0x7 << 16)
@@ -179,6 +184,18 @@ struct omap_hsmmc_plat {
 
 /* Clock Configurations and Macros */
 #define MMC_CLOCK_REFERENCE	96 /* MHz */
+
+/* DLL */
+#define DLL_SWT			(1 << 20)
+#define DLL_FORCE_SR_C_SHIFT	13
+#define DLL_FORCE_SR_C_MASK	0x7f
+#define DLL_FORCE_VALUE		(1 << 12)
+#define DLL_CALIB		(1 << 1)
+
+#define MAX_PHASE_DELAY		0x7c
+
+/* CAPA2 */
+#define CAPA2_TSDR50		(1 << 13)
 
 #define mmc_reg_out(addr, mask, val)\
 	writel((readl(addr) & (~(mask))) | ((val) & (mask)), (addr))

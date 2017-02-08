@@ -166,7 +166,7 @@ int mmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data)
 
 int mmc_execute_tuning(struct mmc *mmc, uint opcode)
 {
-	return mmc->cfg->ops->execute_tuning(mmc, MMC_SEND_TUNING_BLOCK_HS200);
+	return mmc->cfg->ops->execute_tuning(mmc, opcode);
 }
 #endif
 
