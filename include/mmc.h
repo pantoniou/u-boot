@@ -285,6 +285,12 @@
 #define MMC_BUS_WIDTH_4		4
 #define MMC_BUS_WIDTH_8		8
 
+/*
+ * SD bus widths
+ */
+#define SD_BUS_WIDTH_1		0
+#define SD_BUS_WIDTH_4		2
+
 /* Maximum block size for MMC */
 #define MMC_MAX_BLOCK_LEN	512
 
