@@ -222,6 +222,12 @@ struct omap_hsmmc_plat {
 		IE_DTO | IE_CIE | IE_CEB | IE_CCRC | IE_ADMAE | IE_CTO |\
 		IE_BRR | IE_BWR | IE_TC | IE_CC)
 
+#define CON_CLKEXTFREE		(1 << 16)
+#define CON_PADEN		(1 << 15)
+#define PSTATE_CLEV		(1 << 24)
+#define PSTATE_DLEV		(0xF << 20)
+#define PSTATE_DLEV_DAT0	(0x1 << 20)
+
 int omap_mmc_init(int dev_index, uint host_caps_mask, uint f_max, int cd_gpio,
 		int wp_gpio);
 int platform_fixup_disable_uhs_mode(void);
