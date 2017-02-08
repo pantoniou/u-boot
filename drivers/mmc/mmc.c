@@ -162,6 +162,12 @@ int mmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data)
 
 	return ret;
 }
+
+
+int mmc_execute_tuning(struct mmc *mmc, uint opcode)
+{
+	return mmc->cfg->ops->execute_tuning(mmc, MMC_SEND_TUNING_BLOCK_HS200);
+}
 #endif
 
 int mmc_send_status(struct mmc *mmc, int timeout)
@@ -639,6 +645,12 @@ static void mmc_select_card_type(struct mmc *mmc, char card_type)
 		mmc->card_caps |= MMC_MODE_DDR_52MHz;
 	}
 
+	if (caps & MMC_MODE_HS200 &&
+	    card_type & EXT_CSD_CARD_TYPE_HS200_1_8V) {
+		hs_max_dtr = MMC_HS200_MAX_DTR;
+		mmc->card_caps |= MMC_MODE_HS200;
+	}
+
 	mmc->tran_speed = hs_max_dtr;
 }
 
@@ -664,11 +676,22 @@ static int mmc_change_freq(struct mmc *mmc)
 	if (err)
 		return err;
 
-	cardtype = ext_csd[EXT_CSD_CARD_TYPE] & 0xf;
+	cardtype = ext_csd[EXT_CSD_CARD_TYPE] & 0x3f;
 
 	mmc_select_card_type(mmc, cardtype);
 
-	if (mmc->card_caps & MMC_MODE_HS) {
+	if (mmc->card_caps & MMC_MODE_HS200) {
+		err = mmc_select_bus_width(mmc);
+		if (err)
+			return err;
+
+		err = mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL,
+				 EXT_CSD_HS_TIMING, EXT_CSD_TIMING_HS200);
+		if (err)
+			return err;
+
+		mmc_set_timing(mmc, MMC_TIMING_MMC_HS200);
+	} else if (mmc->card_caps & MMC_MODE_HS) {
 		err = mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_HS_TIMING,
 				 1);
 		if (err)
@@ -1659,8 +1682,15 @@ static int mmc_startup(struct mmc *mmc)
 		} else {
 			mmc->tran_speed = 25000000;
 		}
+		mmc_set_clock(mmc, mmc->tran_speed);
 	} else if (mmc->version >= MMC_VERSION_4) {
-		if (mmc->timing == MMC_TIMING_MMC_HS) {
+		mmc_set_clock(mmc, mmc->tran_speed);
+		if (mmc->timing == MMC_TIMING_MMC_HS200) {
+			err = mmc_execute_tuning(mmc,
+						 MMC_SEND_TUNING_BLOCK_HS200);
+			if (err)
+				return err;
+		} else if (mmc->timing == MMC_TIMING_MMC_HS) {
 			err = mmc_select_bus_width(mmc);
 			if (err)
 				return err;
@@ -1670,8 +1700,6 @@ static int mmc_startup(struct mmc *mmc)
 				return err;
 		}
 	}
-
-	mmc_set_clock(mmc, mmc->tran_speed);
 
 	/* Fix the block length for DDR mode */
 	if (mmc->ddr_mode) {
