@@ -25,6 +25,7 @@
 #include <config.h>
 #include <common.h>
 #include <malloc.h>
+#include <memalign.h>
 #include <mmc.h>
 #include <part.h>
 #include <i2c.h>
@@ -81,13 +82,39 @@ struct omap_hsmmc_data {
 	uint iov;
 	uint timing;
 	u8 controller_flags;
+	struct omap_hsmmc_adma_desc *adma_desc_table;
+	uint desc_slot;
+	/* when it exists it's copied (otherwise all 0s) */
+	uint hl_hwinfo;
 #endif
 };
+
+#ifdef CONFIG_DM_MMC
+struct omap_hsmmc_adma_desc {
+	u8 attr;
+	u8 reserved;
+	u16 len;
+	u32 addr;
+};
+
+#define ADMA_MAX_LEN	63488
+
+/* Decriptor table defines */
+#define ADMA_DESC_ATTR_VALID		BIT(0)
+#define ADMA_DESC_ATTR_END		BIT(1)
+#define ADMA_DESC_ATTR_INT		BIT(2)
+#define ADMA_DESC_ATTR_ACT1		BIT(4)
+#define ADMA_DESC_ATTR_ACT2		BIT(5)
+
+#define ADMA_DESC_TRANSFER_DATA		ADMA_DESC_ATTR_ACT2
+#define ADMA_DESC_LINK_DESC	(ADMA_DESC_ATTR_ACT1 | ADMA_DESC_ATTR_ACT2)
+#endif
 
 /* If we fail after 1 second wait, something is really bad */
 #define MAX_RETRY_MS	1000
 #define OMAP_HSMMC_SUPPORTS_DUAL_VOLT		BIT(0)
 #define OMAP_HSMMC_NO_1_8_V			BIT(1)
+#define OMAP_HSMMC_USE_ADMA			BIT(2)
 
 static int mmc_read_data(struct hsmmc *mmc_base, char *buf, unsigned int size);
 static int mmc_write_data(struct hsmmc *mmc_base, const char *buf,
@@ -435,6 +462,9 @@ static int omap_hsmmc_init_setup(struct mmc *mmc)
 	unsigned int reg_val;
 	unsigned int dsor;
 	ulong start;
+#ifdef CONFIG_DM_MMC
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+#endif
 
 	mmc_base = priv->base_addr;
 	mmc_board_init(mmc);
@@ -461,6 +491,8 @@ static int omap_hsmmc_init_setup(struct mmc *mmc)
 #ifdef CONFIG_DM_MMC
 	omap_hsmmc_set_capabilities(mmc);
 	omap_hsmmc_conf_bus_power(mmc);
+	if (priv->hl_hwinfo & MADMA_EN)
+		priv->controller_flags |= OMAP_HSMMC_USE_ADMA;
 #else
 	writel(DTW_1_BITMODE | SDBP_PWROFF | SDVS_3V0, &mmc_base->hctl);
 	writel(readl(&mmc_base->capa) | VS30_3V0SUP | VS18_1V8SUP,
@@ -490,8 +522,8 @@ static int omap_hsmmc_init_setup(struct mmc *mmc)
 	writel(readl(&mmc_base->hctl) | SDBP_PWRON, &mmc_base->hctl);
 
 	writel(IE_BADA | IE_CERR | IE_DEB | IE_DCRC | IE_DTO | IE_CIE |
-		IE_CEB | IE_CCRC | IE_CTO | IE_BRR | IE_BWR | IE_TC | IE_CC,
-		&mmc_base->ie);
+		IE_CEB | IE_CCRC | IE_ADMAE | IE_CTO | IE_BRR | IE_BWR | IE_TC |
+		IE_CC, &mmc_base->ie);
 
 	mmc_init_stream(mmc_base);
 
@@ -543,6 +575,118 @@ static void mmc_reset_controller_fsm(struct hsmmc *mmc_base, u32 bit)
 		}
 	}
 }
+
+#ifdef CONFIG_DM_MMC
+static int omap_hsmmc_adma_desc(struct mmc *mmc, char *buf, u16 len, bool end)
+{
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_adma_desc *desc;
+	u8 attr;
+
+	desc = &priv->adma_desc_table[priv->desc_slot];
+
+	attr = ADMA_DESC_ATTR_VALID | ADMA_DESC_TRANSFER_DATA;
+	if (!end)
+		priv->desc_slot++;
+	else
+		attr |= ADMA_DESC_ATTR_END;
+
+	desc->len = len;
+	desc->addr = (u32)buf;
+	desc->reserved = 0;
+	desc->attr = attr;
+
+	return 0;
+}
+
+static int omap_hsmmc_prepare_adma_table(struct mmc *mmc, struct mmc_data *data)
+{
+	uint total_len = data->blocksize * data->blocks;
+	uint desc_count = DIV_ROUND_UP(total_len, ADMA_MAX_LEN);
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	int i = desc_count;
+	char *buf;
+
+	priv->desc_slot = 0;
+	priv->adma_desc_table = (struct omap_hsmmc_adma_desc *)
+				memalign(ARCH_DMA_MINALIGN, desc_count *
+				sizeof(struct omap_hsmmc_adma_desc));
+
+	if (data->flags & MMC_DATA_READ)
+		buf = data->dest;
+	else
+		buf = (char *)data->src;
+
+	while (--i) {
+		omap_hsmmc_adma_desc(mmc, buf, ADMA_MAX_LEN, false);
+		buf += ADMA_MAX_LEN;
+		total_len -= ADMA_MAX_LEN;
+	}
+
+	omap_hsmmc_adma_desc(mmc, buf, total_len, true);
+
+	flush_dcache_range((long)priv->adma_desc_table,
+			   (long)priv->adma_desc_table +
+			   ROUND(desc_count *
+			   sizeof(struct omap_hsmmc_adma_desc),
+			   ARCH_DMA_MINALIGN));
+	return 0;
+}
+
+static void omap_hsmmc_prepare_data(struct mmc *mmc, struct mmc_data *data)
+{
+	struct hsmmc *mmc_base;
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	u32 val;
+	char *buf;
+
+	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+	omap_hsmmc_prepare_adma_table(mmc, data);
+
+	if (data->flags & MMC_DATA_READ)
+		buf = data->dest;
+	else
+		buf = (char *)data->src;
+
+	val = readl(&mmc_base->hctl);
+	val |= DMA_SELECT;
+	writel(val, &mmc_base->hctl);
+
+	val = readl(&mmc_base->con);
+	val |= DMA_MASTER;
+	writel(val, &mmc_base->con);
+
+	writel((u32)priv->adma_desc_table, &mmc_base->admasal);
+
+	/* TODO: This shouldn't be required for read. However I don't seem
+	 * to get valid data without this.
+	 */
+	flush_dcache_range((u32)buf,
+			   (u32)buf +
+			   ROUND(data->blocksize * data->blocks,
+			   ARCH_DMA_MINALIGN));
+}
+
+static void omap_hsmmc_dma_cleanup(struct mmc *mmc)
+{
+	struct hsmmc *mmc_base;
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	u32 val;
+
+	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+
+	val = readl(&mmc_base->con);
+	val &= ~DMA_MASTER;
+	writel(val, &mmc_base->con);
+
+	val = readl(&mmc_base->hctl);
+	val &= ~DMA_SELECT;
+	writel(val, &mmc_base->hctl);
+
+	kfree(priv->adma_desc_table);
+}
+#endif
+
 #ifndef CONFIG_DM_MMC
 static int omap_hsmmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd,
 			struct mmc_data *data)
@@ -557,6 +701,9 @@ static int omap_hsmmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 	struct hsmmc *mmc_base;
 	unsigned int flags, mmc_stat;
 	ulong start;
+#ifdef CONFIG_DM_MMC
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+#endif
 
 	mmc_base = priv->base_addr;
 	start = get_timer(0);
@@ -627,6 +774,14 @@ static int omap_hsmmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 			flags |= (DP_DATA | DDIR_READ);
 		else
 			flags |= (DP_DATA | DDIR_WRITE);
+
+#ifdef CONFIG_DM_MMC
+		if ((priv->controller_flags & OMAP_HSMMC_USE_ADMA) &&
+		    cmd->cmdidx != MMC_SEND_TUNING_BLOCK_HS200) {
+			omap_hsmmc_prepare_data(mmc, data);
+			flags |= DE_ENABLE;
+		}
+#endif
 	}
 
 	writel(cmd->cmdarg, &mmc_base->arg);
@@ -662,6 +817,28 @@ static int omap_hsmmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 				cmd->response[0] = readl(&mmc_base->rsp10);
 		}
 	}
+
+#ifdef CONFIG_DM_MMC
+	if ((priv->controller_flags & OMAP_HSMMC_USE_ADMA) && data &&
+	    cmd->cmdidx != MMC_SEND_TUNING_BLOCK_HS200) {
+		if (mmc_stat & IE_ADMAE) {
+			omap_hsmmc_dma_cleanup(mmc);
+			return -1;
+		}
+
+		do {
+			mmc_stat = readl(&mmc_base->stat);
+			if (mmc_stat & TC_MASK) {
+				writel(readl(&mmc_base->stat) | TC_MASK,
+				       &mmc_base->stat);
+				break;
+			}
+		} while (1);
+
+		omap_hsmmc_dma_cleanup(mmc);
+		return 0;
+	}
+#endif
 
 	if (data && (data->flags & MMC_DATA_READ)) {
 		mmc_read_data(mmc_base,	data->dest,
@@ -1065,8 +1242,17 @@ static int omap_hsmmc_ofdata_to_platdata(struct udevice *dev)
 	int node = dev_of_offset(dev);
 	int ret;
 
-	plat->base_addr = map_physmem(dev_get_addr(dev), sizeof(struct hsmmc *),
+	/* NOTE: the base address is offset'ed but the mapping contains all */
+	plat->base_addr = map_physmem(dev_get_addr(dev),
+				      sizeof(struct hsmmc) + data->reg_offset,
 				      MAP_NOCACHE) + data->reg_offset;
+
+	/* and read hwinfo if available */
+	if (!data->reg_offset)
+		plat->hl_hwinfo = 0;
+	else
+		plat->hl_hwinfo = readl(plat->base_addr -
+					data->reg_offset + HL_HWINFO_OFFSET);
 
 	ret = mmc_of_parse(fdt, node, cfg);
 	if (ret < 0)
