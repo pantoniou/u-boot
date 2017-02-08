@@ -79,6 +79,7 @@ struct omap_hsmmc_data {
 #endif
 #ifdef CONFIG_DM_MMC
 	uint iov;
+	uint timing;
 	u8 controller_flags;
 #endif
 };
@@ -228,6 +229,35 @@ void mmc_init_stream(struct hsmmc *mmc_base)
 }
 
 #ifdef CONFIG_DM_MMC
+static void omap_hsmmc_set_timing(struct mmc *mmc)
+{
+	u32 val;
+	struct hsmmc *mmc_base;
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+
+	mmc_base = priv->base_addr;
+
+	val = readl(&mmc_base->ac12);
+	val &= ~AC12_UHSMC_MASK;
+	switch (mmc->timing) {
+	case MMC_TIMING_MMC_HS200:
+		val |= AC12_UHSMC_SDR104;
+		break;
+	case MMC_TIMING_SD_HS:
+	case MMC_TIMING_MMC_HS:
+		val |= AC12_UHSMC_RES;
+		break;
+	case MMC_TIMING_MMC_DDR52:
+		val |= AC12_UHSMC_RES;
+		break;
+	default:
+		val |= AC12_UHSMC_RES;
+		break;
+	}
+	writel(val, &mmc_base->ac12);
+	priv->timing = mmc->timing;
+}
+
 static void omap_hsmmc_conf_bus_power(struct mmc *mmc)
 {
 	struct hsmmc *mmc_base;
@@ -726,6 +756,11 @@ static int omap_hsmmc_set_ios(struct udevice *dev)
 
 	if (priv_data->clock != mmc->clock)
 		omap_hsmmc_set_clock(mmc);
+
+#ifdef CONFIG_DM_MMC
+	if (priv_data->timing != mmc->timing)
+		omap_hsmmc_set_timing(mmc);
+#endif
 	return 0;
 }
 

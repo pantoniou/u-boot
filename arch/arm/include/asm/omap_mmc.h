@@ -47,7 +47,8 @@ struct hsmmc {
 	unsigned int sysctl;		/* 0x12C */
 	unsigned int stat;		/* 0x130 */
 	unsigned int ie;		/* 0x134 */
-	unsigned char res4[0x8];
+	unsigned char res4[0x4];
+	unsigned int ac12;		/* 0x13C */
 	unsigned int capa;		/* 0x140 */
 };
 
@@ -155,6 +156,10 @@ struct omap_hsmmc_plat {
 #define IOV_3V3				3300000
 #define IOV_3V0				3000000
 #define IOV_1V8				1800000
+
+#define AC12_UHSMC_MASK			(7 << 16)
+#define AC12_UHSMC_SDR104		(3 << 16)
+#define AC12_UHSMC_RES			(0x7 << 16)
 
 /* Driver definitions */
 #define MMCSD_SECTOR_SIZE		512
