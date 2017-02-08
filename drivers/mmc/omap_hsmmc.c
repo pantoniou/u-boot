@@ -34,6 +34,10 @@
 #include <palmas.h>
 #include <asm/io.h>
 #include <asm/arch/mmc_host_def.h>
+#ifdef CONFIG_OMAP54XX
+#include <asm/arch/mux_dra7xx.h>
+#include <asm/arch/dra7xx_iodelay.h>
+#endif
 #if !defined(CONFIG_SOC_KEYSTONE)
 #include <asm/gpio.h>
 #include <asm/arch/sys_proto.h>
@@ -59,7 +63,17 @@ DECLARE_GLOBAL_DATA_PTR;
 
 struct omap2_mmc_platform_config {
 	u32 reg_offset;
+	u8 controller_flags;
 };
+
+#ifdef CONFIG_IODELAY_RECALIBRATION
+struct omap_hsmmc_pinctrl_state {
+	struct pad_conf_entry *padconf;
+	int npads;
+	struct iodelay_cfg_entry *iodelay;
+	int niodelays;
+};
+#endif
 
 struct omap_hsmmc_data {
 	struct hsmmc *base_addr;
@@ -86,6 +100,13 @@ struct omap_hsmmc_data {
 	uint desc_slot;
 	/* when it exists it's copied (otherwise all 0s) */
 	uint hl_hwinfo;
+	int node;
+#ifdef CONFIG_IODELAY_RECALIBRATION
+	struct omap_hsmmc_pinctrl_state *default_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *hs_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *hs200_1_8v_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *ddr_1_8v_pinctrl_state;
+#endif
 #endif
 };
 
@@ -115,6 +136,7 @@ struct omap_hsmmc_adma_desc {
 #define OMAP_HSMMC_SUPPORTS_DUAL_VOLT		BIT(0)
 #define OMAP_HSMMC_NO_1_8_V			BIT(1)
 #define OMAP_HSMMC_USE_ADMA			BIT(2)
+#define OMAP_HSMMC_REQUIRE_IODELAY		BIT(3)
 
 static int mmc_read_data(struct hsmmc *mmc_base, char *buf, unsigned int size);
 static int mmc_write_data(struct hsmmc *mmc_base, const char *buf,
@@ -257,36 +279,58 @@ void mmc_init_stream(struct hsmmc *mmc_base)
 }
 
 #ifdef CONFIG_DM_MMC
+#ifdef CONFIG_IODELAY_RECALIBRATION
 static void omap_hsmmc_set_timing(struct mmc *mmc)
 {
 	u32 val;
 	struct hsmmc *mmc_base;
 	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_pinctrl_state *pinctrl_state;
 
 	mmc_base = priv->base_addr;
 
 	writel(readl(&mmc_base->con) & ~DDR, &mmc_base->con);
+	omap_hsmmc_stop_clock(mmc_base);
 	val = readl(&mmc_base->ac12);
 	val &= ~AC12_UHSMC_MASK;
 	switch (mmc->timing) {
 	case MMC_TIMING_MMC_HS200:
 		val |= AC12_UHSMC_SDR104;
+		pinctrl_state = priv->hs200_1_8v_pinctrl_state;
 		break;
 	case MMC_TIMING_SD_HS:
 	case MMC_TIMING_MMC_HS:
 		val |= AC12_UHSMC_RES;
+		pinctrl_state = priv->hs_pinctrl_state;
 		break;
 	case MMC_TIMING_MMC_DDR52:
 		val |= AC12_UHSMC_RES;
 		writel(readl(&mmc_base->con) | DDR, &mmc_base->con);
+		pinctrl_state = priv->ddr_1_8v_pinctrl_state;
 		break;
 	default:
 		val |= AC12_UHSMC_RES;
+		pinctrl_state = priv->default_pinctrl_state;
 		break;
 	}
 	writel(val, &mmc_base->ac12);
+
+	if (priv->controller_flags & OMAP_HSMMC_REQUIRE_IODELAY) {
+		if (pinctrl_state->iodelay)
+			late_recalibrate_iodelay(pinctrl_state->padconf,
+						 pinctrl_state->npads,
+						 pinctrl_state->iodelay,
+						 pinctrl_state->niodelays);
+		else
+			do_set_mux32((*ctrl)->control_padconf_core_base,
+				     pinctrl_state->padconf,
+				     pinctrl_state->npads);
+	}
+
+	omap_hsmmc_start_clock(mmc_base);
 	priv->timing = mmc->timing;
 }
+#endif
 
 static void omap_hsmmc_conf_bus_power(struct mmc *mmc)
 {
@@ -1054,8 +1098,10 @@ static int omap_hsmmc_set_ios(struct udevice *dev)
 		omap_hsmmc_set_clock(mmc);
 
 #ifdef CONFIG_DM_MMC
+#ifdef CONFIG_IODELAY_RECALIBRATION
 	if (priv_data->timing != mmc->timing)
 		omap_hsmmc_set_timing(mmc);
+#endif
 #endif
 	return 0;
 }
@@ -1231,6 +1277,261 @@ int omap_mmc_init(int dev_index, uint host_caps_mask, uint f_max, int cd_gpio,
 	return 0;
 }
 #else
+#ifdef CONFIG_IODELAY_RECALIBRATION
+static struct pad_conf_entry *
+omap_hsmmc_get_pad_conf_entry(const fdt32_t *pinctrl, int count)
+{
+	int index = 0;
+	struct pad_conf_entry *padconf;
+
+	padconf = (struct pad_conf_entry *)malloc(sizeof(*padconf) * count);
+	if (!padconf) {
+		printf("failed to allocate memory\n");
+		return 0;
+	}
+
+	while (index < count) {
+		padconf[index].offset = fdt32_to_cpu(pinctrl[index]);
+		padconf[index].val = fdt32_to_cpu(pinctrl[index + 1]);
+		index += 2;
+	}
+
+	return padconf;
+}
+
+static struct iodelay_cfg_entry *
+omap_hsmmc_get_iodelay_cfg_entry(const fdt32_t *pinctrl, int count)
+{
+	int index = 0;
+	struct iodelay_cfg_entry *iodelay;
+
+	iodelay = (struct iodelay_cfg_entry *)malloc(sizeof(*iodelay) * count);
+	if (!iodelay) {
+		printf("failed to allocate memory\n");
+		return 0;
+	}
+
+	while (index < count) {
+		iodelay[index].offset = fdt32_to_cpu(pinctrl[index]);
+		iodelay[index].a_delay = fdt32_to_cpu(pinctrl[index + 1]);
+		iodelay[index].g_delay = fdt32_to_cpu(pinctrl[index + 2]);
+		index += 3;
+	}
+
+	return iodelay;
+}
+
+static const fdt32_t *omap_hsmmc_get_pinctrl_entry(uint32_t phandle,
+						   const char *name, int *len)
+{
+	const void *fdt = gd->fdt_blob;
+	int offset;
+	const fdt32_t *pinctrl;
+
+	offset = fdt_node_offset_by_phandle(fdt, phandle);
+	if (offset < 0) {
+		printf("failed to get pinctrl node %s.\n",
+		       fdt_strerror(offset));
+		return 0;
+	}
+
+	pinctrl = fdt_getprop(fdt, offset, name, len);
+	if (!pinctrl) {
+		printf("failed to get property %s\n", name);
+		return 0;
+	}
+
+	return pinctrl;
+}
+
+static uint32_t omap_hsmmc_get_pad_conf_phandle(struct mmc *mmc,
+						char *prop_name)
+{
+	const void *fdt = gd->fdt_blob;
+	const __be32 *phandle;
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	int node = priv->node;
+
+	phandle = fdt_getprop(fdt, node, prop_name, NULL);
+	if (!phandle) {
+		printf("failed to get property %s\n", prop_name);
+		return 0;
+	}
+
+	return fdt32_to_cpu(*phandle);
+}
+
+static uint32_t omap_hsmmc_get_iodelay_phandle(struct mmc *mmc,
+					       char *prop_name)
+{
+	const void *fdt = gd->fdt_blob;
+	const __be32 *phandle;
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	int len;
+	int count;
+	int node = priv->node;
+
+	phandle = fdt_getprop(fdt, node, prop_name, &len);
+	if (!phandle) {
+		printf("failed to get property %s\n", prop_name);
+		return 0;
+	}
+
+	/* No manual mode iodelay values if count < 2 */
+	count = len / sizeof(*phandle);
+	if (count < 2)
+		return 0;
+
+	return fdt32_to_cpu(*(phandle + 1));
+}
+
+
+static struct pad_conf_entry *
+omap_hsmmc_get_pad_conf(struct mmc *mmc, char *prop_name, int *npads)
+{
+	int len;
+	int count;
+	struct pad_conf_entry *padconf;
+	uint32_t phandle;
+	const fdt32_t *pinctrl;
+
+	phandle = omap_hsmmc_get_pad_conf_phandle(mmc, prop_name);
+	if (!phandle)
+		return ERR_PTR(-EINVAL);
+
+	pinctrl = omap_hsmmc_get_pinctrl_entry(phandle, "pinctrl-single,pins",
+					       &len);
+	if (!pinctrl)
+		return ERR_PTR(-EINVAL);
+
+	count = len / sizeof(*pinctrl);
+	padconf = omap_hsmmc_get_pad_conf_entry(pinctrl, count);
+	if (!padconf)
+		return ERR_PTR(-EINVAL);
+
+	*npads = count;
+
+	return padconf;
+}
+
+static struct iodelay_cfg_entry *
+omap_hsmmc_get_iodelay(struct mmc *mmc, char *prop_name, int *niodelay)
+{
+	int len;
+	int count;
+	struct iodelay_cfg_entry *iodelay;
+	uint32_t phandle;
+	const fdt32_t *pinctrl;
+
+	phandle = omap_hsmmc_get_iodelay_phandle(mmc, prop_name);
+	/* Not all modes have manual mode iodelay values. So its not fatal */
+	if (!phandle)
+		return 0;
+
+	pinctrl = omap_hsmmc_get_pinctrl_entry(phandle, "pinctrl-pin-array",
+					       &len);
+	if (!pinctrl)
+		return ERR_PTR(-EINVAL);
+
+	count = len / sizeof(*pinctrl);
+	iodelay = omap_hsmmc_get_iodelay_cfg_entry(pinctrl, count);
+	if (!iodelay)
+		return ERR_PTR(-EINVAL);
+
+	*niodelay = count;
+
+	return iodelay;
+}
+
+static struct omap_hsmmc_pinctrl_state *
+omap_hsmmc_get_pinctrl_by_mode(struct mmc *mmc, char *mode)
+{
+	int index;
+	int npads = 0;
+	int niodelays = 0;
+	const void *fdt = gd->fdt_blob;
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	int node = priv->node;
+	char prop_name[11];
+	struct omap_hsmmc_pinctrl_state *pinctrl_state;
+
+	pinctrl_state = (struct omap_hsmmc_pinctrl_state *)
+			 malloc(sizeof(*pinctrl_state));
+	if (!pinctrl_state) {
+		printf("failed to allocate memory\n");
+		return 0;
+	}
+
+	index = fdt_stringlist_search(fdt, node, "pinctrl-names", mode);
+	if (index < 0) {
+		printf("fail to find %s mode %s\n", mode, fdt_strerror(index));
+		goto err_pinctrl_state;
+	}
+
+	sprintf(prop_name, "pinctrl-%d", index);
+
+	pinctrl_state->padconf = omap_hsmmc_get_pad_conf(mmc, prop_name,
+							 &npads);
+	if (IS_ERR(pinctrl_state->padconf))
+		goto err_pinctrl_state;
+	pinctrl_state->npads = npads;
+
+	pinctrl_state->iodelay = omap_hsmmc_get_iodelay(mmc, prop_name,
+							&niodelays);
+	if (IS_ERR(pinctrl_state->iodelay))
+		goto err_padconf;
+	pinctrl_state->niodelays = niodelays;
+
+	return pinctrl_state;
+
+err_padconf:
+	kfree(pinctrl_state->padconf);
+
+err_pinctrl_state:
+	kfree(pinctrl_state);
+	return 0;
+}
+
+#define OMAP_HSMMC_SETUP_PINCTRL(capmask, mode)			\
+	do {							\
+		struct omap_hsmmc_pinctrl_state *s;			\
+		if (!(cfg->host_caps & capmask))		\
+			break;					\
+								\
+		s = omap_hsmmc_get_pinctrl_by_mode(mmc, #mode);	\
+		if (!s) {					\
+			printf("no pinctrl for %s\n", #mode);	\
+			cfg->host_caps &= ~(capmask);		\
+		} else {						\
+			priv->mode##_pinctrl_state = s;		\
+		}						\
+	} while (0)
+
+static int omap_hsmmc_get_pinctrl_state(struct mmc *mmc)
+{
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct mmc_config *cfg = &priv->cfg;
+	struct omap_hsmmc_pinctrl_state *default_pinctrl;
+
+	if (!(priv->controller_flags & OMAP_HSMMC_REQUIRE_IODELAY))
+		return 0;
+
+	default_pinctrl = omap_hsmmc_get_pinctrl_by_mode(mmc, "default");
+	if (!default_pinctrl) {
+		printf("no pinctrl state for default mode\n");
+		return -EINVAL;
+	}
+
+	priv->default_pinctrl_state = default_pinctrl;
+
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_HS200, hs200_1_8v);
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_DDR_52MHz, ddr_1_8v);
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_HS, hs);
+
+	return 0;
+}
+#endif
+
 #if CONFIG_IS_ENABLED(OF_CONTROL) && !CONFIG_IS_ENABLED(OF_PLATDATA)
 static int omap_hsmmc_ofdata_to_platdata(struct udevice *dev)
 {
@@ -1253,6 +1554,8 @@ static int omap_hsmmc_ofdata_to_platdata(struct udevice *dev)
 	else
 		plat->hl_hwinfo = readl(plat->base_addr -
 					data->reg_offset + HL_HWINFO_OFFSET);
+	priv->node = node;
+	cfg = &priv->cfg;
 
 	ret = mmc_of_parse(fdt, node, cfg);
 	if (ret < 0)
@@ -1291,6 +1594,10 @@ static int omap_hsmmc_probe(struct udevice *dev)
 	struct omap_hsmmc_data *priv = dev_get_priv(dev);
 	struct mmc_config *cfg = &plat->cfg;
 	struct mmc *mmc;
+#ifdef CONFIG_IODELAY_RECALIBRATION
+	int ret;
+	struct omap2_mmc_platform_config *data;
+#endif
 
 	cfg->name = "OMAP SD/MMC";
 	priv->base_addr = plat->base_addr;
@@ -1311,6 +1618,21 @@ static int omap_hsmmc_probe(struct udevice *dev)
 	gpio_request_by_name(dev, "wp-gpios", 0, &priv->wp_gpio, GPIOD_IS_IN);
 #endif
 
+#ifdef CONFIG_IODELAY_RECALIBRATION
+	data  = (struct omap2_mmc_platform_config *)dev_get_driver_data(dev);
+	if (data && (data->controller_flags & OMAP_HSMMC_REQUIRE_IODELAY))
+		priv->controller_flags |= OMAP_HSMMC_REQUIRE_IODELAY;
+
+	ret = omap_hsmmc_get_pinctrl_state(mmc);
+	if (ret < 0) {
+		priv->controller_flags &= ~OMAP_HSMMC_REQUIRE_IODELAY;
+		cfg->host_caps &= ~(MMC_MODE_UHS_SDR12 | MMC_MODE_UHS_SDR25
+				    | MMC_MODE_UHS_SDR50 | MMC_MODE_UHS_SDR104
+				    | MMC_MODE_UHS_DDR50 | MMC_MODE_DDR_52MHz
+				    | MMC_MODE_HS200);
+	}
+#endif
+
 	mmc->dev = dev;
 	upriv->mmc = mmc;
 
@@ -1320,14 +1642,22 @@ static int omap_hsmmc_probe(struct udevice *dev)
 #if CONFIG_IS_ENABLED(OF_CONTROL) && !CONFIG_IS_ENABLED(OF_PLATDATA)
 static const struct omap2_mmc_platform_config omap3_mmc_pdata = {
 	.reg_offset = 0,
+	.controller_flags = 0,
 };
 
 static const struct omap2_mmc_platform_config am33xx_mmc_pdata = {
 	.reg_offset = 0x100,
+	.controller_flags = 0,
 };
 
 static const struct omap2_mmc_platform_config omap4_mmc_pdata = {
 	.reg_offset = 0x100,
+	.controller_flags = 0,
+};
+
+static const struct omap2_mmc_platform_config dra7_mmc_pdata = {
+	.reg_offset = 0x100,
+	.controller_flags = OMAP_HSMMC_REQUIRE_IODELAY,
 };
 
 static const struct udevice_id omap_hsmmc_ids[] = {
@@ -1343,7 +1673,11 @@ static const struct udevice_id omap_hsmmc_ids[] = {
 			.compatible = "ti,am33xx-hsmmc",
 			.data = (ulong)&am33xx_mmc_pdata
 	},
-	{ }
+	{
+			.compatible = "ti,dra7-hsmmc",
+			.data = (ulong)&dra7_mmc_pdata
+	},
+	{ },
 };
 #endif
 
