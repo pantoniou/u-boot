@@ -1028,6 +1028,37 @@ static int mmc_app_set_bus_width(struct mmc *mmc, int width)
 	return 0;
 }
 
+static int mmc_sd_switch_hs(struct mmc *mmc)
+{
+	int err;
+	ALLOC_CACHE_ALIGN_BUFFER(uint, switch_status, 16);
+
+	/*
+	 * If the host doesn't support SD_HIGHSPEED, do not switch card to
+	 * HIGHSPEED mode even if the card support SD_HIGHSPPED.
+	 * This can avoid furthur problem when the card runs in different
+	 * mode between the host.
+	 */
+	if (!((mmc->cfg->host_caps & MMC_MODE_HS_52MHz) &&
+	      (mmc->cfg->host_caps & MMC_MODE_HS)))
+		return -EINVAL;
+
+	if (!(mmc->card_caps & MMC_MODE_HS))
+		return -EINVAL;
+
+	err = sd_switch(mmc, SD_SWITCH_SWITCH, 0, 1, (u8 *)switch_status);
+	if (err)
+		return err;
+
+	if (!((__be32_to_cpu(switch_status[4]) & 0x0f000000) == 0x01000000))
+		return -EINVAL;
+
+	mmc_set_timing(mmc, MMC_TIMING_SD_HS);
+	mmc->tran_speed = HIGH_SPEED_MAX_DTR;
+
+	return 0;
+}
+
 static int sd_change_freq(struct mmc *mmc)
 {
 	int err;
@@ -1114,26 +1145,19 @@ retry_scr:
 	}
 
 	/* If high-speed isn't supported, we return */
-	if (!(__be32_to_cpu(switch_status[3]) & SD_HIGHSPEED_SUPPORTED))
-		return 0;
-
-	/*
-	 * If the host doesn't support SD_HIGHSPEED, do not switch card to
-	 * HIGHSPEED mode even if the card support SD_HIGHSPPED.
-	 * This can avoid furthur problem when the card runs in different
-	 * mode between the host.
-	 */
-	if (!((mmc->cfg->host_caps & MMC_MODE_HS_52MHz) &&
-		(mmc->cfg->host_caps & MMC_MODE_HS)))
-		return 0;
-
-	err = sd_switch(mmc, SD_SWITCH_SWITCH, 0, 1, (u8 *)switch_status);
-
-	if (err)
-		return err;
-
-	if ((__be32_to_cpu(switch_status[4]) & 0x0f000000) == 0x01000000)
+	if (__be32_to_cpu(switch_status[3]) & SD_HIGHSPEED_SUPPORTED)
 		mmc->card_caps |= MMC_MODE_HS;
+
+	err = mmc_sd_switch_hs(mmc);
+	if (err)
+		mmc->tran_speed = 25000000;
+
+	mmc_set_clock(mmc, mmc->tran_speed);
+	if (mmc->card_caps & MMC_MODE_4BIT) {
+		err = mmc_app_set_bus_width(mmc, MMC_BUS_WIDTH_4);
+		if (err)
+			return err;
+	}
 
 	return 0;
 }
@@ -1688,23 +1712,9 @@ static int mmc_startup(struct mmc *mmc)
 	mmc->card_caps &= mmc->cfg->host_caps;
 
 	if (IS_SD(mmc)) {
-		if (mmc->card_caps & MMC_MODE_4BIT) {
-			err = mmc_app_set_bus_width(mmc, MMC_BUS_WIDTH_4);
-			if (err)
-				return err;
-		}
-
 		err = sd_read_ssr(mmc);
 		if (err)
 			return err;
-
-		if (mmc->card_caps & MMC_MODE_HS) {
-			mmc_set_timing(mmc, MMC_TIMING_SD_HS);
-			mmc->tran_speed = 50000000;
-		} else {
-			mmc->tran_speed = 25000000;
-		}
-		mmc_set_clock(mmc, mmc->tran_speed);
 	} else if (mmc->version >= MMC_VERSION_4) {
 		mmc_set_clock(mmc, mmc->tran_speed);
 		if (mmc->timing == MMC_TIMING_MMC_HS200) {
