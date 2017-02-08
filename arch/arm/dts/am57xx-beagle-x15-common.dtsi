@@ -461,6 +461,7 @@
 	bus-width = <8>;
 	ti,non-removable;
 	cap-mmc-dual-data-rate;
+	no-1-8-v;
 };
 
 &sata {
