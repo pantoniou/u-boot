@@ -271,6 +271,10 @@
 #define MMC_TIMING_MMC_DDR52	3
 #define MMC_TIMING_MMC_HS200	4
 
+#define MMC_BUS_WIDTH_1		1
+#define MMC_BUS_WIDTH_4		4
+#define MMC_BUS_WIDTH_8		8
+
 /* Maximum block size for MMC */
 #define MMC_MAX_BLOCK_LEN	512
 

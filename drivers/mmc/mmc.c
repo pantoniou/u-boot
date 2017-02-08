@@ -30,6 +30,7 @@ static const unsigned int sd_au_size[] = {
 	SZ_16M / 512,	(SZ_16M + SZ_8M) / 512,	SZ_32M / 512,	SZ_64M / 512,
 };
 static void mmc_set_timing(struct mmc *mmc, uint timing);
+static int mmc_select_bus_width(struct mmc *mmc);
 
 #if CONFIG_IS_ENABLED(MMC_TINY)
 static struct mmc mmc_static;
@@ -1132,6 +1133,113 @@ static void mmc_set_bus_width(struct mmc *mmc, uint width)
 	mmc_set_ios(mmc);
 }
 
+static int mmc_select_hs_ddr(struct mmc *mmc)
+{
+	u32 ext_csd_bits;
+	int err = 0;
+	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
+	ALLOC_CACHE_ALIGN_BUFFER(u8, test_csd, MMC_MAX_BLOCK_LEN);
+
+	if (!(mmc->card_caps & MMC_MODE_DDR_52MHz))
+		return 0;
+
+	if (mmc->bus_width == MMC_BUS_WIDTH_1)
+		return 0;
+
+	err = mmc_send_ext_csd(mmc, ext_csd);
+	if (err)
+		return err;
+
+	ext_csd_bits = (mmc->bus_width == MMC_BUS_WIDTH_8) ?
+		EXT_CSD_DDR_BUS_WIDTH_8 : EXT_CSD_DDR_BUS_WIDTH_4;
+
+	err = mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL,
+			 EXT_CSD_BUS_WIDTH,
+			 ext_csd_bits);
+	if (err)
+		return err;
+
+	mmc_set_timing(mmc, MMC_TIMING_MMC_DDR52);
+	mmc->ddr_mode = true;
+
+	err = mmc_send_ext_csd(mmc, test_csd);
+	if (err)
+		return err;
+
+	/* Only compare read only fields */
+	if (!(ext_csd[EXT_CSD_PARTITIONING_SUPPORT]
+		== test_csd[EXT_CSD_PARTITIONING_SUPPORT] &&
+	    ext_csd[EXT_CSD_HC_WP_GRP_SIZE]
+		== test_csd[EXT_CSD_HC_WP_GRP_SIZE] &&
+	    ext_csd[EXT_CSD_REV]
+		== test_csd[EXT_CSD_REV] &&
+	    ext_csd[EXT_CSD_HC_ERASE_GRP_SIZE]
+		== test_csd[EXT_CSD_HC_ERASE_GRP_SIZE] &&
+	    memcmp(&ext_csd[EXT_CSD_SEC_CNT],
+		   &test_csd[EXT_CSD_SEC_CNT], 4) == 0))
+		err = -EBADMSG;
+
+	return err;
+}
+
+static int mmc_select_bus_width(struct mmc *mmc)
+{
+	static unsigned ext_csd_bits[] = {
+		EXT_CSD_BUS_WIDTH_8,
+		EXT_CSD_BUS_WIDTH_4,
+	};
+	static unsigned bus_widths[] = {
+		MMC_BUS_WIDTH_8,
+		MMC_BUS_WIDTH_4,
+	};
+	const struct mmc_config *cfg = mmc->cfg;
+	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
+	ALLOC_CACHE_ALIGN_BUFFER(u8, test_csd, MMC_MAX_BLOCK_LEN);
+	unsigned idx = 0, bus_width = 0;
+	int err = 0;
+
+	if (!(cfg->host_caps & (MMC_MODE_8BIT | MMC_MODE_4BIT)))
+		return 0;
+
+	idx = (cfg->host_caps & MMC_MODE_8BIT) ? 0 : 1;
+
+	err = mmc_send_ext_csd(mmc, ext_csd);
+	if (err)
+		return err;
+
+	for (; idx < ARRAY_SIZE(bus_widths); idx++) {
+		err = mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL,
+				 EXT_CSD_BUS_WIDTH,
+				 ext_csd_bits[idx]);
+		if (err)
+			continue;
+
+		bus_width = bus_widths[idx];
+		mmc_set_bus_width(mmc, bus_width);
+
+		err = mmc_send_ext_csd(mmc, test_csd);
+		if (err)
+			return err;
+
+		/* Only compare read only fields */
+		if (ext_csd[EXT_CSD_PARTITIONING_SUPPORT]
+			== test_csd[EXT_CSD_PARTITIONING_SUPPORT] &&
+		    ext_csd[EXT_CSD_HC_WP_GRP_SIZE]
+			== test_csd[EXT_CSD_HC_WP_GRP_SIZE] &&
+		    ext_csd[EXT_CSD_REV]
+			== test_csd[EXT_CSD_REV] &&
+		    ext_csd[EXT_CSD_HC_ERASE_GRP_SIZE]
+			== test_csd[EXT_CSD_HC_ERASE_GRP_SIZE] &&
+		    memcmp(&ext_csd[EXT_CSD_SEC_CNT],
+			   &test_csd[EXT_CSD_SEC_CNT], 4) == 0)
+			break;
+		else
+			err = -EBADMSG;
+	}
+
+	return err;
+}
+
 static int mmc_startup(struct mmc *mmc)
 {
 	int err, i;
@@ -1139,7 +1247,6 @@ static int mmc_startup(struct mmc *mmc)
 	u64 cmult, csize, capacity;
 	struct mmc_cmd cmd;
 	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
-	ALLOC_CACHE_ALIGN_BUFFER(u8, test_csd, MMC_MAX_BLOCK_LEN);
 	bool has_parts = false;
 	bool part_completed;
 	struct blk_desc *bdesc;
@@ -1485,88 +1592,15 @@ static int mmc_startup(struct mmc *mmc)
 			mmc->tran_speed = 25000000;
 		}
 	} else if (mmc->version >= MMC_VERSION_4) {
-		/* Only version 4 of MMC supports wider bus widths */
-		int idx;
-
-		/* An array of possible bus widths in order of preference */
-		static unsigned ext_csd_bits[] = {
-			EXT_CSD_DDR_BUS_WIDTH_8,
-			EXT_CSD_DDR_BUS_WIDTH_4,
-			EXT_CSD_BUS_WIDTH_8,
-			EXT_CSD_BUS_WIDTH_4,
-			EXT_CSD_BUS_WIDTH_1,
-		};
-
-		/* An array to map CSD bus widths to host cap bits */
-		static unsigned ext_to_hostcaps[] = {
-			[EXT_CSD_DDR_BUS_WIDTH_4] =
-				MMC_MODE_DDR_52MHz | MMC_MODE_4BIT,
-			[EXT_CSD_DDR_BUS_WIDTH_8] =
-				MMC_MODE_DDR_52MHz | MMC_MODE_8BIT,
-			[EXT_CSD_BUS_WIDTH_4] = MMC_MODE_4BIT,
-			[EXT_CSD_BUS_WIDTH_8] = MMC_MODE_8BIT,
-		};
-
-		/* An array to map chosen bus width to an integer */
-		static unsigned widths[] = {
-			8, 4, 8, 4, 1,
-		};
-
-		for (idx=0; idx < ARRAY_SIZE(ext_csd_bits); idx++) {
-			unsigned int extw = ext_csd_bits[idx];
-			unsigned int caps = ext_to_hostcaps[extw];
-
-			/*
-			 * If the bus width is still not changed,
-			 * don't try to set the default again.
-			 * Otherwise, recover from switch attempts
-			 * by switching to 1-bit bus width.
-			 */
-			if (extw == EXT_CSD_BUS_WIDTH_1 &&
-					mmc->bus_width == 1) {
-				err = 0;
-				break;
-			}
-
-			/*
-			 * Check to make sure the card and controller support
-			 * these capabilities
-			 */
-			if ((mmc->card_caps & caps) != caps)
-				continue;
-
-			err = mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL,
-					EXT_CSD_BUS_WIDTH, extw);
-
+		if (mmc->timing == MMC_TIMING_MMC_HS) {
+			err = mmc_select_bus_width(mmc);
 			if (err)
-				continue;
+				return err;
 
-			mmc->ddr_mode = (caps & MMC_MODE_DDR_52MHz) ? 1 : 0;
-			mmc_set_bus_width(mmc, widths[idx]);
-
-			err = mmc_send_ext_csd(mmc, test_csd);
-
+			err = mmc_select_hs_ddr(mmc);
 			if (err)
-				continue;
-
-			/* Only compare read only fields */
-			if (ext_csd[EXT_CSD_PARTITIONING_SUPPORT]
-				== test_csd[EXT_CSD_PARTITIONING_SUPPORT] &&
-			    ext_csd[EXT_CSD_HC_WP_GRP_SIZE]
-				== test_csd[EXT_CSD_HC_WP_GRP_SIZE] &&
-			    ext_csd[EXT_CSD_REV]
-				== test_csd[EXT_CSD_REV] &&
-			    ext_csd[EXT_CSD_HC_ERASE_GRP_SIZE]
-				== test_csd[EXT_CSD_HC_ERASE_GRP_SIZE] &&
-			    memcmp(&ext_csd[EXT_CSD_SEC_CNT],
-				   &test_csd[EXT_CSD_SEC_CNT], 4) == 0)
-				break;
-			else
-				err = -EBADMSG;
+				return err;
 		}
-
-		if (err)
-			return err;
 	}
 
 	mmc_set_clock(mmc, mmc->tran_speed);
