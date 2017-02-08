@@ -2090,8 +2090,8 @@ static void mmc_set_initial_state(struct mmc *mmc)
 
 static void mmc_power_up(struct mmc *mmc)
 {
-	mmc_set_vdd(mmc, true);
 	mmc_set_initial_state(mmc);
+	mmc_set_vdd(mmc, true);
 	udelay(10000);
 }
 
