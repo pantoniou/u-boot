@@ -1155,7 +1155,7 @@ retry_scr:
 	if (err)
 		mmc->tran_speed = 25000000;
 
-	mmc_set_clock(mmc, mmc->tran_speed);
+	mmc_set_clock(mmc, mmc->tran_speed, false);
 	if (mmc->card_caps & MMC_MODE_4BIT) {
 		err = mmc_app_set_bus_width(mmc, MMC_BUS_WIDTH_4);
 		if (err)
@@ -1274,7 +1274,7 @@ static int mmc_set_ios(struct mmc *mmc)
 }
 #endif
 
-int mmc_set_clock(struct mmc *mmc, uint clock)
+int mmc_set_clock(struct mmc *mmc, uint clock, u8 disable)
 {
 	if (clock > mmc->cfg->f_max)
 		clock = mmc->cfg->f_max;
@@ -1283,6 +1283,7 @@ int mmc_set_clock(struct mmc *mmc, uint clock)
 		clock = mmc->cfg->f_min;
 
 	mmc->clock = clock;
+	mmc->clk_disable = disable;
 
 	return mmc_set_ios(mmc);
 }
@@ -1739,7 +1740,7 @@ static int mmc_startup(struct mmc *mmc)
 		if (err)
 			return err;
 	} else if (mmc->version >= MMC_VERSION_4) {
-		mmc_set_clock(mmc, mmc->tran_speed);
+		mmc_set_clock(mmc, mmc->tran_speed, false);
 		if (mmc->timing == MMC_TIMING_MMC_HS200) {
 			err = mmc_execute_tuning(mmc,
 						 MMC_SEND_TUNING_BLOCK_HS200);
@@ -1860,7 +1861,7 @@ static void mmc_set_initial_state(struct mmc *mmc)
 		printf("failed to set signal voltage\n");
 
 	mmc_set_bus_width(mmc, 1);
-	mmc_set_clock(mmc, 1);
+	mmc_set_clock(mmc, 1, false);
 	mmc_set_timing(mmc, MMC_TIMING_LEGACY);
 }
 

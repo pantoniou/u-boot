@@ -476,6 +476,7 @@ struct mmc {
 	void *priv;
 	uint has_init;
 	int high_capacity;
+	u8 clk_disable;
 	uint bus_width;
 	uint clock;
 	uint timing;
@@ -567,7 +568,7 @@ int mmc_init(struct mmc *mmc);
 int mmc_send_tuning(struct mmc *mmc, u32 opcode, int *cmd_error);
 int mmc_of_parse(const void *fdt, int node, struct mmc_config *cfg);
 int mmc_read(struct mmc *mmc, u64 src, uchar *dst, int size);
-int mmc_set_clock(struct mmc *mmc, uint clock);
+int mmc_set_clock(struct mmc *mmc, uint clock, u8 disable);
 struct mmc *find_mmc_device(int dev_num);
 int mmc_set_dev(int dev_num);
 void print_mmc_devices(char separator);
