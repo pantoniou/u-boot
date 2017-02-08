@@ -147,6 +147,16 @@ int mmc_of_parse(const void *fdt, int node, struct mmc_config *cfg)
 		cfg->host_caps |= MMC_MODE_DDR_52MHz;
 	if (fdtdec_get_bool(fdt, node, "mmc-hs200-1_8v"))
 		cfg->host_caps |= MMC_MODE_HS200;
+	if (fdtdec_get_bool(fdt, node, "sd-uhs-sdr104"))
+		cfg->host_caps |= MMC_MODE_UHS_SDR104;
+	if (fdtdec_get_bool(fdt, node, "sd-uhs-sdr50"))
+		cfg->host_caps |= MMC_MODE_UHS_SDR50;
+	if (fdtdec_get_bool(fdt, node, "sd-uhs-ddr50"))
+		cfg->host_caps |= MMC_MODE_UHS_DDR50;
+	if (fdtdec_get_bool(fdt, node, "sd-uhs-sdr25"))
+		cfg->host_caps |= MMC_MODE_UHS_SDR25;
+	if (fdtdec_get_bool(fdt, node, "sd-uhs-sdr12"))
+		cfg->host_caps |= MMC_MODE_UHS_SDR12;
 
 	return 0;
 }
