@@ -59,6 +59,10 @@
 #define MMC_MODE_SPI		(1 << 4)
 #define MMC_MODE_DDR_52MHz	(1 << 5)
 
+#define MMC_HIGH_26_MAX_DTR	26000000
+#define MMC_HIGH_52_MAX_DTR	52000000
+#define MMC_HIGH_DDR_MAX_DTR	52000000
+
 #define SD_DATA_4BIT	0x00040000
 
 #define IS_SD(x)	((x)->version & SD_VERSION_SD)

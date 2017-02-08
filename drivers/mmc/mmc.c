@@ -546,6 +546,32 @@ int mmc_switch(struct mmc *mmc, u8 set, u8 index, u8 value)
 
 }
 
+static void mmc_select_card_type(struct mmc *mmc, char card_type)
+{
+	u32 caps = mmc->cfg->host_caps;
+	uint hs_max_dtr = mmc->tran_speed;
+
+	if (caps & MMC_MODE_HS &&
+	    card_type & EXT_CSD_CARD_TYPE_26) {
+		hs_max_dtr = MMC_HIGH_26_MAX_DTR;
+		mmc->card_caps |= MMC_MODE_HS;
+	}
+
+	if (caps & MMC_MODE_HS &&
+	    card_type & EXT_CSD_CARD_TYPE_52) {
+		hs_max_dtr = MMC_HIGH_52_MAX_DTR;
+		mmc->card_caps |= MMC_MODE_HS_52MHz;
+	}
+
+	if (caps & MMC_MODE_DDR_52MHz &&
+	    card_type & EXT_CSD_CARD_TYPE_DDR_1_8V) {
+		hs_max_dtr = MMC_HIGH_DDR_MAX_DTR;
+		mmc->card_caps |= MMC_MODE_DDR_52MHz;
+	}
+
+	mmc->tran_speed = hs_max_dtr;
+}
+
 static int mmc_change_freq(struct mmc *mmc)
 {
 	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
@@ -585,14 +611,7 @@ static int mmc_change_freq(struct mmc *mmc)
 	if (!ext_csd[EXT_CSD_HS_TIMING])
 		return 0;
 
-	/* High Speed is set, there are two types: 52MHz and 26MHz */
-	if (cardtype & EXT_CSD_CARD_TYPE_52) {
-		if (cardtype & EXT_CSD_CARD_TYPE_DDR_1_8V)
-			mmc->card_caps |= MMC_MODE_DDR_52MHz;
-		mmc->card_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
-	} else {
-		mmc->card_caps |= MMC_MODE_HS;
-	}
+	mmc_select_card_type(mmc, cardtype);
 
 	return 0;
 }
@@ -1536,13 +1555,6 @@ static int mmc_startup(struct mmc *mmc)
 
 		if (err)
 			return err;
-
-		if (mmc->card_caps & MMC_MODE_HS) {
-			if (mmc->card_caps & MMC_MODE_HS_52MHz)
-				mmc->tran_speed = 52000000;
-			else
-				mmc->tran_speed = 26000000;
-		}
 	}
 
 	mmc_set_clock(mmc, mmc->tran_speed);
