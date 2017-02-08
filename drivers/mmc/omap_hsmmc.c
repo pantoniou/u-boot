@@ -1612,6 +1612,23 @@ static int omap_hsmmc_bind(struct udevice *dev)
 	return mmc_bind(dev, &plat->mmc, &plat->cfg);
 }
 #endif
+
+__weak int platform_fixup_disable_uhs_mode(void)
+{
+	return 0;
+}
+
+static int omap_hsmmc_platform_fixup(struct mmc *mmc)
+{
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct mmc_config *cfg = &priv->cfg;
+
+	if (platform_fixup_disable_uhs_mode())
+		cfg->host_caps &= ~MMC_MODE_HS200;
+
+	return 0;
+}
+
 static int omap_hsmmc_probe(struct udevice *dev)
 {
 	struct omap_hsmmc_plat *plat = dev_get_platdata(dev);
@@ -1637,6 +1654,8 @@ static int omap_hsmmc_probe(struct udevice *dev)
 	if (mmc == NULL)
 		return -1;
 #endif
+
+	omap_hsmmc_platform_fixup(mmc);
 
 #if defined(OMAP_HSMMC_USE_GPIO) && CONFIG_IS_ENABLED(OF_CONTROL)
 	gpio_request_by_name(dev, "cd-gpios", 0, &priv->cd_gpio, GPIOD_IS_IN);

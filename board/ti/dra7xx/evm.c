@@ -711,6 +711,13 @@ int board_mmc_init(bd_t *bis)
 }
 #endif
 
+#ifdef CONFIG_OMAP_HSMMC
+int platform_fixup_disable_uhs_mode(void)
+{
+	return omap_revision() == DRA752_ES1_1;
+}
+#endif
+
 #ifdef CONFIG_USB_DWC3
 static struct dwc3_device usb_otg_ss1 = {
 	.maximum_speed = USB_SPEED_SUPER,

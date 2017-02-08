@@ -670,6 +670,13 @@ int board_mmc_init(bd_t *bis)
 }
 #endif
 
+#ifdef CONFIG_OMAP_HSMMC
+int platform_fixup_disable_uhs_mode(void)
+{
+	return omap_revision() == DRA752_ES1_1;
+}
+#endif
+
 #if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_OS_BOOT)
 int spl_start_uboot(void)
 {
