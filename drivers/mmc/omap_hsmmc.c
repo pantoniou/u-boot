@@ -499,6 +499,26 @@ tuning_error:
 }
 #endif
 
+static void mmc_enable_irq(struct mmc *mmc, struct mmc_cmd *cmd)
+{
+	u32 irq_mask = INT_EN_MASK;
+	struct hsmmc *mmc_base;
+
+	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+
+	/*
+	 * TODO: Errata i802 indicates only DCRC interrupts can occur during
+	 * tuning procedure and DCRC should be disabled. But see occurences
+	 * of DEB, CIE, CEB, CCRC interupts during tuning procedure. These
+	 * interrupts occur along with BRR, so the data is actually in the
+	 * buffer. It has to be debugged why these interrutps occur
+	 */
+	if (cmd && cmd->cmdidx == MMC_SEND_TUNING_BLOCK_HS200)
+		irq_mask &= ~(IE_DEB | IE_DCRC | IE_CIE | IE_CEB | IE_CCRC);
+
+	writel(irq_mask, &mmc_base->ie);
+}
+
 static int omap_hsmmc_init_setup(struct mmc *mmc)
 {
 	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
@@ -565,10 +585,7 @@ static int omap_hsmmc_init_setup(struct mmc *mmc)
 
 	writel(readl(&mmc_base->hctl) | SDBP_PWRON, &mmc_base->hctl);
 
-	writel(IE_BADA | IE_CERR | IE_DEB | IE_DCRC | IE_DTO | IE_CIE |
-		IE_CEB | IE_CCRC | IE_ADMAE | IE_CTO | IE_BRR | IE_BWR | IE_TC |
-		IE_CC, &mmc_base->ie);
-
+	mmc_enable_irq(mmc, NULL);
 	mmc_init_stream(mmc_base);
 
 	return 0;
@@ -827,6 +844,8 @@ static int omap_hsmmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 		}
 #endif
 	}
+
+	mmc_enable_irq(mmc, cmd);
 
 	writel(cmd->cmdarg, &mmc_base->arg);
 	udelay(20);		/* To fix "No status update" error on eMMC */
