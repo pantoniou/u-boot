@@ -286,6 +286,10 @@
 #define MMC_BUS_WIDTH_4		4
 #define MMC_BUS_WIDTH_8		8
 
+#define MMC_SIGNAL_VOLTAGE_330	1
+#define MMC_SIGNAL_VOLTAGE_180	2
+#define MMC_SIGNAL_VOLTAGE_120	3
+
 /*
  * SD bus widths
  */
@@ -463,6 +467,7 @@ struct mmc {
 	uint bus_width;
 	uint clock;
 	uint timing;
+	uint signal_voltage;
 	uint card_caps;
 	uint ocr;
 	uint dsr;
