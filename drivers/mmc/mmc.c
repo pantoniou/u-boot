@@ -596,22 +596,23 @@ static int mmc_change_freq(struct mmc *mmc)
 
 	cardtype = ext_csd[EXT_CSD_CARD_TYPE] & 0xf;
 
-	err = mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_HS_TIMING, 1);
-
-	if (err)
-		return err;
-
-	/* Now check to see that it worked */
-	err = mmc_send_ext_csd(mmc, ext_csd);
-
-	if (err)
-		return err;
-
-	/* No high-speed support */
-	if (!ext_csd[EXT_CSD_HS_TIMING])
-		return 0;
-
 	mmc_select_card_type(mmc, cardtype);
+
+	if (mmc->card_caps & MMC_MODE_HS) {
+		err = mmc_switch(mmc, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_HS_TIMING,
+				 1);
+		if (err)
+			return err;
+
+		/* Now check to see that it worked */
+		err = mmc_send_ext_csd(mmc, ext_csd);
+		if (err)
+			return err;
+
+		/* No high-speed support */
+		if (!ext_csd[EXT_CSD_HS_TIMING])
+			return 0;
+	}
 
 	return 0;
 }
