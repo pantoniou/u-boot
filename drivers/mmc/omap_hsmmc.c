@@ -46,6 +46,7 @@
 #include <asm/arch/mux.h>
 #endif
 #include <dm.h>
+#include <power/regulator.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -102,6 +103,7 @@ struct omap_hsmmc_data {
 	uint hl_hwinfo;
 	int node;
 	char *version;
+	struct udevice *vmmc_supply;
 #ifdef CONFIG_IODELAY_RECALIBRATION
 	struct omap_hsmmc_pinctrl_state *default_pinctrl_state;
 	struct omap_hsmmc_pinctrl_state *hs_pinctrl_state;
@@ -499,6 +501,23 @@ tuning_error:
 
 	return ret;
 }
+
+#ifdef CONFIG_DM_REGULATOR
+static int omap_hsmmc_set_vdd(struct mmc *mmc, bool enable)
+{
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct hsmmc *mmc_base = priv->base_addr;
+
+	if (enable) {
+		regulator_set_enable(priv->vmmc_supply, true);
+		mmc_init_stream(mmc_base);
+	} else {
+		regulator_set_enable(priv->vmmc_supply, false);
+	}
+
+	return 0;
+}
+#endif
 #endif
 
 static void mmc_enable_irq(struct mmc *mmc, struct mmc_cmd *cmd)
@@ -588,7 +607,10 @@ static int omap_hsmmc_init_setup(struct mmc *mmc)
 	writel(readl(&mmc_base->hctl) | SDBP_PWRON, &mmc_base->hctl);
 
 	mmc_enable_irq(mmc, NULL);
+
+#ifndef CONFIG_DM_REGULATOR
 	mmc_init_stream(mmc_base);
+#endif
 
 	return 0;
 }
@@ -1211,6 +1233,9 @@ static const struct mmc_ops omap_hsmmc_ops = {
 #endif
 #ifdef CONFIG_DM_MMC
 	.execute_tuning = omap_hsmmc_execute_tuning,
+#ifdef CONFIG_DM_REGULATOR
+	.set_vdd	= omap_hsmmc_set_vdd,
+#endif
 #endif
 };
 #endif
@@ -1670,6 +1695,9 @@ static int omap_hsmmc_probe(struct udevice *dev)
 
 	omap_hsmmc_platform_fixup(mmc);
 
+#ifdef CONFIG_DM_REGULATOR
+	device_get_supply_regulator(dev, "vmmc-supply", &priv->vmmc_supply);
+#endif
 #if defined(OMAP_HSMMC_USE_GPIO) && CONFIG_IS_ENABLED(OF_CONTROL)
 	gpio_request_by_name(dev, "cd-gpios", 0, &priv->cd_gpio, GPIOD_IS_IN);
 	gpio_request_by_name(dev, "wp-gpios", 0, &priv->wp_gpio, GPIOD_IS_IN);
