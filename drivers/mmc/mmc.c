@@ -2098,6 +2098,7 @@ static void mmc_power_up(struct mmc *mmc)
 static void mmc_power_off(struct mmc *mmc)
 {
 	mmc_set_vdd(mmc, false);
+	mmc_set_clock(mmc, 1, true);
 }
 
 static void mmc_power_cycle(struct mmc *mmc)
