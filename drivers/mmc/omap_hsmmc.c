@@ -104,6 +104,7 @@ struct omap_hsmmc_data {
 	int node;
 	char *version;
 	struct udevice *vmmc_supply;
+	struct udevice *vmmc_aux_supply;
 	ushort last_cmd;
 	uint signal_voltage;
 #ifdef CONFIG_IODELAY_RECALIBRATION
@@ -472,6 +473,31 @@ static int omap_hsmmc_card_busy(struct mmc *mmc)
 	return ret;
 }
 
+#ifdef CONFIG_DM_REGULATOR
+static int omap_hsmmc_set_io_regulator(struct mmc *mmc, int uV)
+{
+	int ret;
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+
+	if (!priv->vmmc_aux_supply)
+		return 0;
+
+	ret = regulator_set_enable(priv->vmmc_aux_supply, false);
+	if (ret && ret != -ENOSYS)
+		return ret;
+
+	ret = regulator_set_value(priv->vmmc_aux_supply, uV);
+	if (ret)
+		return ret;
+
+	ret = regulator_set_enable(priv->vmmc_aux_supply, true);
+	if (ret && ret != -ENOSYS)
+		return ret;
+
+	return 0;
+}
+#endif
+
 static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 {
 	u32 val;
@@ -493,7 +519,11 @@ static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 		writel(val, &mmc_base->ac12);
 
 #if defined(CONFIG_OMAP54XX) && defined(CONFIG_PALMAS_POWER)
+#ifdef CONFIG_DM_REGULATOR
+		return omap_hsmmc_set_io_regulator(mmc, 3000000);
+#else
 		vmmc_pbias_config(LDO_VOLT_3V0);
+#endif
 #endif
 	} else if (mmc->signal_voltage == MMC_SIGNAL_VOLTAGE_180) {
 		val = readl(&mmc_base->capa);
@@ -507,7 +537,11 @@ static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 		writel(val, &mmc_base->ac12);
 
 #if defined(CONFIG_OMAP54XX) && defined(CONFIG_PALMAS_POWER)
+#ifdef CONFIG_DM_REGULATOR
+		return omap_hsmmc_set_io_regulator(mmc, 1800000);
+#else
 		vmmc_pbias_config(LDO_VOLT_1V8);
+#endif
 #endif
 	} else {
 		return -EOPNOTSUPP;
@@ -1871,6 +1905,8 @@ static int omap_hsmmc_probe(struct udevice *dev)
 
 #ifdef CONFIG_DM_REGULATOR
 	device_get_supply_regulator(dev, "vmmc-supply", &priv->vmmc_supply);
+	device_get_supply_regulator(dev, "vmmc_aux-supply",
+				    &priv->vmmc_aux_supply);
 #endif
 #if defined(OMAP_HSMMC_USE_GPIO) && CONFIG_IS_ENABLED(OF_CONTROL)
 	gpio_request_by_name(dev, "cd-gpios", 0, &priv->cd_gpio, GPIOD_IS_IN);
