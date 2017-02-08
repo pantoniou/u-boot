@@ -1834,7 +1834,8 @@ static int omap_hsmmc_platform_fixup(struct mmc *mmc)
 
 	if (platform_fixup_disable_uhs_mode()) {
 		priv->version = "rev11";
-		cfg->host_caps &= ~MMC_MODE_HS200;
+		cfg->host_caps &= ~(MMC_MODE_HS200 | MMC_MODE_UHS_SDR104
+				    | MMC_MODE_UHS_SDR50);
 	}
 
 	return 0;
