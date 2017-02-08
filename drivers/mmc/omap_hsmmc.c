@@ -111,6 +111,11 @@ struct omap_hsmmc_data {
 	struct omap_hsmmc_pinctrl_state *hs_pinctrl_state;
 	struct omap_hsmmc_pinctrl_state *hs200_1_8v_pinctrl_state;
 	struct omap_hsmmc_pinctrl_state *ddr_1_8v_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *sdr104_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *ddr50_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *sdr50_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *sdr25_pinctrl_state;
+	struct omap_hsmmc_pinctrl_state *sdr12_pinctrl_state;
 #endif
 #endif
 };
@@ -303,6 +308,27 @@ static void omap_hsmmc_set_timing(struct mmc *mmc)
 	case MMC_TIMING_MMC_HS200:
 		val |= AC12_UHSMC_SDR104;
 		pinctrl_state = priv->hs200_1_8v_pinctrl_state;
+		break;
+	case MMC_TIMING_UHS_SDR104:
+		val |= AC12_UHSMC_SDR104;
+		pinctrl_state = priv->sdr104_pinctrl_state;
+		break;
+	case MMC_TIMING_UHS_DDR50:
+		val |= AC12_UHSMC_DDR50;
+		writel(readl(&mmc_base->con) | DDR, &mmc_base->con);
+		pinctrl_state = priv->ddr50_pinctrl_state;
+		break;
+	case MMC_TIMING_UHS_SDR50:
+		val |= AC12_UHSMC_SDR50;
+		pinctrl_state = priv->sdr50_pinctrl_state;
+		break;
+	case MMC_TIMING_UHS_SDR25:
+		val |= AC12_UHSMC_SDR25;
+		pinctrl_state = priv->sdr25_pinctrl_state;
+		break;
+	case MMC_TIMING_UHS_SDR12:
+		val |= AC12_UHSMC_SDR12;
+		pinctrl_state = priv->sdr12_pinctrl_state;
 		break;
 	case MMC_TIMING_SD_HS:
 	case MMC_TIMING_MMC_HS:
@@ -1728,6 +1754,11 @@ static int omap_hsmmc_get_pinctrl_state(struct mmc *mmc)
 	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_HS200, hs200_1_8v);
 	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_DDR_52MHz, ddr_1_8v);
 	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_HS, hs);
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_UHS_SDR104, sdr104);
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_UHS_DDR50, ddr50);
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_UHS_SDR50, sdr50);
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_UHS_SDR25, sdr25);
+	OMAP_HSMMC_SETUP_PINCTRL(MMC_MODE_UHS_SDR12, sdr12);
 
 	return 0;
 }

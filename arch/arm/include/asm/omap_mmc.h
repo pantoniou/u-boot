@@ -179,6 +179,11 @@ struct omap_hsmmc_plat {
 #define AC12_SCLK_SEL		(1 << 23)
 #define AC12_UHSMC_MASK			(7 << 16)
 #define AC12_UHSMC_SDR104		(3 << 16)
+#define AC12_UHSMC_SDR12		(0 << 16)
+#define AC12_UHSMC_SDR25		(1 << 16)
+#define AC12_UHSMC_SDR50		(2 << 16)
+#define AC12_UHSMC_SDR104		(3 << 16)
+#define AC12_UHSMC_DDR50		(4 << 16)
 #define AC12_UHSMC_RES			(0x7 << 16)
 
 /* Driver definitions */
