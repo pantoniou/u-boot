@@ -221,6 +221,8 @@ int mmc_send_status(struct mmc *mmc, int timeout)
 int mmc_set_blocklen(struct mmc *mmc, int len)
 {
 	struct mmc_cmd cmd;
+	int retries = 5;
+	int err;
 
 	if (mmc->ddr_mode)
 		return 0;
@@ -229,7 +231,13 @@ int mmc_set_blocklen(struct mmc *mmc, int len)
 	cmd.resp_type = MMC_RSP_R1;
 	cmd.cmdarg = len;
 
-	return mmc_send_cmd(mmc, &cmd, NULL);
+	do {
+		err = mmc_send_cmd(mmc, &cmd, NULL);
+		if (!err)
+			break;
+	} while (retries--);
+
+	return err;
 }
 
 static const u8 tuning_blk_pattern_4bit[] = {
@@ -1644,6 +1652,7 @@ static int mmc_startup(struct mmc *mmc)
 	u64 cmult, csize, capacity;
 	struct mmc_cmd cmd;
 	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
+	int retries = 3;
 	bool has_parts = false;
 	bool part_completed;
 	struct blk_desc *bdesc;
@@ -1666,7 +1675,11 @@ static int mmc_startup(struct mmc *mmc)
 	cmd.resp_type = MMC_RSP_R2;
 	cmd.cmdarg = 0;
 
-	err = mmc_send_cmd(mmc, &cmd, NULL);
+	do {
+		err = mmc_send_cmd(mmc, &cmd, NULL);
+		if (!err)
+			break;
+	} while (retries--);
 
 	if (err)
 		return err;
