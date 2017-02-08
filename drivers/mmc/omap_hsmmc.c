@@ -237,6 +237,7 @@ static void omap_hsmmc_set_timing(struct mmc *mmc)
 
 	mmc_base = priv->base_addr;
 
+	writel(readl(&mmc_base->con) & ~DDR, &mmc_base->con);
 	val = readl(&mmc_base->ac12);
 	val &= ~AC12_UHSMC_MASK;
 	switch (mmc->timing) {
@@ -249,6 +250,7 @@ static void omap_hsmmc_set_timing(struct mmc *mmc)
 		break;
 	case MMC_TIMING_MMC_DDR52:
 		val |= AC12_UHSMC_RES;
+		writel(readl(&mmc_base->con) | DDR, &mmc_base->con);
 		break;
 	default:
 		val |= AC12_UHSMC_RES;

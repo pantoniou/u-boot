@@ -78,6 +78,7 @@ struct omap_hsmmc_plat {
 #define WPP_ACTIVEHIGH			(0x0 << 8)
 #define RESERVED_MASK			(0x3 << 9)
 #define CTPL_MMC_SD			(0x0 << 11)
+#define DDR				(0x1 << 19)
 #define BLEN_512BYTESLEN		(0x200 << 0)
 #define NBLK_STPCNT			(0x0 << 16)
 #define DE_ENABLE			(0x1 << 0)
