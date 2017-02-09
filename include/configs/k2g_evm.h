@@ -16,6 +16,9 @@
 /* Platform type */
 #define CONFIG_SOC_K2G
 
+#define CONFIG_BOARD_LATE_INIT
+#define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
+
 /* U-Boot general configuration */
 #define CONFIG_EXTRA_ENV_KS2_BOARD_SETTINGS				\
 	DEFAULT_MMC_TI_ARGS						\
@@ -28,7 +31,14 @@
 	"rd_spec=-\0"							\
 	"args_ubi=setenv bootargs ${bootargs} rootfstype=ubifs "	\
 	"root=ubi0:rootfs rootflags=sync rw ubi.mtd=ubifs,2048\0"	\
-	"name_fdt=keystone-k2g-evm.dtb\0"				\
+	"findfdt="\
+		"if test $board_name = 66AK2GGP; then " \
+			 "setenv name_fdt keystone-k2g-evm.dtb; " \
+		"else if test $board_name = 66AK2GIC; then " \
+			 "setenv name_fdt keystone-k2g-ice.dtb; " \
+		"else if test $name_fdt = undefined; then " \
+			"echo WARNING: Could not determine device tree to use;"\
+		"fi;fi;fi;\0" \
 	"name_mon=skern-k2g.bin\0"					\
 	"name_ubi=k2g-evm-ubifs.ubi\0"					\
 	"name_uboot=u-boot-spi-k2g-evm.gph\0"				\
@@ -46,7 +56,7 @@
 	"run envboot; "							\
 	"run set_name_pmmc init_${boot} init_fw_rd_${boot} "		\
 	"get_pmmc_${boot} run_pmmc get_mon_${boot} run_mon "		\
-	"get_fdt_${boot} get_kern_${boot} run_kern"
+	"findfdt get_fdt_${boot} get_kern_${boot} run_kern"
 
 #include <configs/ti_armv7_keystone2.h>
 
