@@ -1,0 +1,21 @@
+/*
+ * Copyright 2017 Texas Instruments, Inc.
+ *
+ * 66AK2G0X Generic File
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+/dts-v1/;
+
+#include "keystone-k2g.dtsi"
+
+/ {
+	compatible =  "ti,k2g-generic", "ti,k2g", "ti,keystone";
+	model = "Texas Instruments 66AK2G02 Generic";
+
+	chosen {
+		stdout-path = &uart0;
+	};
+};
