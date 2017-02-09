@@ -11,6 +11,7 @@
 #include <asm/ti-common/keystone_net.h>
 #include <asm/arch/psc_defs.h>
 #include <asm/arch/mmc_host_def.h>
+#include <fdtdec.h>
 #include "mux-k2g.h"
 #include "../common/board_detect.h"
 
@@ -206,6 +207,23 @@ int board_mmc_init(bd_t *bis)
 
 	omap_mmc_init(0, 0, 0, -1, -1);
 	omap_mmc_init(1, 0, 0, -1, -1);
+	return 0;
+}
+#endif
+
+#if defined(CONFIG_DTB_RESELECT)
+int embedded_dtb_select(void)
+{
+	int rc;
+	rc = ti_i2c_eeprom_am_get(CONFIG_EEPROM_BUS_ADDRESS,
+			CONFIG_EEPROM_CHIP_ADDRESS);
+	if (rc) {
+		printf("EEPROM read failed. Unable to do board detection\n");
+		return -1;
+	}
+
+	fdtdec_setup();
+
 	return 0;
 }
 #endif
