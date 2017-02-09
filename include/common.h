@@ -478,6 +478,10 @@ void	pci_init_board(void);
 #endif
 #endif
 
+#if defined(CONFIG_DTB_RESELECT)
+int	embedded_dtb_select(void);
+#endif
+
 int	misc_init_f   (void);
 int	misc_init_r   (void);
 
