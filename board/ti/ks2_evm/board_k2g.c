@@ -205,7 +205,9 @@ int board_mmc_init(bd_t *bis)
 		return -1;
 	}
 
-	omap_mmc_init(0, 0, 0, -1, -1);
+	if (board_is_k2g_gp())
+		omap_mmc_init(0, 0, 0, -1, -1);
+
 	omap_mmc_init(1, 0, 0, -1, -1);
 	return 0;
 }
@@ -255,11 +257,13 @@ int embedded_dtb_select(void)
 
 	k2g_reset_mux_config();
 
-	/* deassert FLASH_HOLD */
-	clrbits_le32(K2G_GPIO1_BANK2_BASE + K2G_GPIO_DIR_OFFSET,
-		     BIT(9));
-	setbits_le32(K2G_GPIO1_BANK2_BASE + K2G_GPIO_SETDATA_OFFSET,
-		     BIT(9));
+	if (board_is_k2g_gp()) {
+		/* deassert FLASH_HOLD */
+		clrbits_le32(K2G_GPIO1_BANK2_BASE + K2G_GPIO_DIR_OFFSET,
+			     BIT(9));
+		setbits_le32(K2G_GPIO1_BANK2_BASE + K2G_GPIO_SETDATA_OFFSET,
+			     BIT(9));
+	}
 
 	if (psc_enable_module(KS2_LPSC_GPMC))
 		printf("%s can't enable gpmc\n", __func__);
