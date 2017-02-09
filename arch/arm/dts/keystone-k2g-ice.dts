@@ -1,0 +1,25 @@
+/*
+ * Copyright 2017 Texas Instruments, Inc.
+ *
+ * K2G Industrial Communication Engine EVM device tree
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+/dts-v1/;
+
+#include "keystone-k2g.dtsi"
+
+/ {
+	compatible = "ti,k2g-ice", "ti,k2g", "ti,keystone";
+	model = "Texas Instruments K2G Industrial Communication EVM";
+
+	chosen {
+		stdout-path = &uart0;
+	};
+};
+
+&mmc1 {
+	status = "okay";
+};
