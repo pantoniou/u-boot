@@ -315,12 +315,29 @@ struct pin_cfg k2g_evm_pin_cfg[] = {
 	{ MAX_PIN_N, }
 };
 
+struct pin_cfg k2g_ice_evm_pin_cfg[] = {
+	/* MMC 1 */
+	{ 63, MODE(0) | PIN_PTD },	/* MMC1_DAT3.MMC1_DAT3 */
+	{ 64, MODE(0) | PIN_PTU },	/* MMC1_DAT2.MMC1_DAT2 */
+	{ 65, MODE(0) | PIN_PTU },	/* MMC1_DAT1.MMC1_DAT1 */
+	{ 66, MODE(0) | PIN_PTD },	/* MMC1_DAT0.MMC1_DAT0 */
+	{ 67, MODE(0) | PIN_PTD },	/* MMC1_CLK.MMC1_CLK   */
+	{ 68, MODE(0) | PIN_PTD },	/* MMC1_CMD.MMC1_CMD   */
+	{ 69, MODE(3) | PIN_PTU },	/* MMC1_SDCD.GPIO0_69  */
+	{ 70, MODE(0) | PIN_PTU },	/* MMC1_SDWP.MMC1_SDWP */
+	{ 71, MODE(0) | PIN_PTD },	/* MMC1_POW.MMC1_POW   */
+
+	{ MAX_PIN_N, }
+};
+
 void k2g_mux_config(void)
 {
 	if (!board_ti_was_eeprom_read()) {
 		configure_pin_mux(k2g_generic_pin_cfg);
 	} else if (board_is_k2g_gp()) {
 		configure_pin_mux(k2g_evm_pin_cfg);
+	} else if (board_is_k2g_ice()) {
+		configure_pin_mux(k2g_ice_evm_pin_cfg);
 	} else {
 		puts("Unknown board, cannot configure pinmux.");
 		hang();
