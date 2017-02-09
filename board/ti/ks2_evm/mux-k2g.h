@@ -11,6 +11,18 @@
 #include <asm/io.h>
 #include <asm/arch/mux-k2g.h>
 #include <asm/arch/hardware.h>
+#include "board.h"
+
+struct pin_cfg k2g_generic_pin_cfg[] = {
+	/* UART0 */
+	{ 115,  MODE(0) },      /* SOC_UART0_RXD */
+	{ 116,  MODE(0) },      /* SOC_UART0_TXD */
+
+	/* I2C 0 */
+	{ 223,  MODE(0) },      /* SOC_I2C0_SCL */
+	{ 224,  MODE(0) },      /* SOC_I2C0_SDA */
+	{ MAX_PIN_N, }
+};
 
 struct pin_cfg k2g_evm_pin_cfg[] = {
 	/* GPMC */
@@ -170,8 +182,6 @@ struct pin_cfg k2g_evm_pin_cfg[] = {
 	{ 114,	MODE(0) },	/* SOC_SPI2_MOSI */
 
 	/* UART0 */
-	{ 115,	MODE(0) },	/* SOC_UART0_RXD */
-	{ 116,	MODE(0) },	/* SOC_UART0_TXD */
 	{ 117,	MODE(0) },	/* SOC_UART0_CTSn */
 	{ 118,	MODE(0) },	/* SOC_UART0_RTSn */
 
@@ -281,8 +291,6 @@ struct pin_cfg k2g_evm_pin_cfg[] = {
 	{ 215,	MODE(2) },	/* SOC_MCBSPCLKR */
 
 	/* I2C */
-	{ 223,	MODE(0) },	/* SOC_I2C0_SCL */
-	{ 224,	MODE(0) },	/* SOC_I2C0_SDA */
 	{ 225,	MODE(0) },	/* SOC_I2C1_SCL */
 	{ 226,	MODE(0) },	/* SOC_I2C1_SDA */
 	{ 227,	MODE(0) },	/* SOC_I2C2_SCL */
@@ -309,5 +317,12 @@ struct pin_cfg k2g_evm_pin_cfg[] = {
 
 void k2g_mux_config(void)
 {
-	configure_pin_mux(k2g_evm_pin_cfg);
+	if (!board_ti_was_eeprom_read()) {
+		configure_pin_mux(k2g_generic_pin_cfg);
+	} else if (board_is_k2g_gp()) {
+		configure_pin_mux(k2g_evm_pin_cfg);
+	} else {
+		puts("Unknown board, cannot configure pinmux.");
+		hang();
+	}
 }
