@@ -51,4 +51,4 @@ CONFIG_CMD_NAND=y
 CONFIG_DM_NAND=y
 CONFIG_DTB_RESELECT=y
 CONFIG_FIT_EMBED=y
-CONFIG_OF_LIST="keystone-k2g-generic keystone-k2g-evm"
+CONFIG_OF_LIST="keystone-k2g-generic keystone-k2g-evm keystone-k2g-ice"
