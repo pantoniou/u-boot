@@ -239,6 +239,9 @@ int board_early_init_f(void)
 	setbits_le32(K2G_GPIO1_BANK2_BASE + K2G_GPIO_SETDATA_OFFSET,
 		     BIT(9));
 
+	if (psc_enable_module(KS2_LPSC_GPMC))
+		printf("%s can't enable gpmc\n", __func__);
+
 	return 0;
 }
 #endif
