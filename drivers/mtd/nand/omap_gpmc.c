@@ -8,7 +8,11 @@
 #include <common.h>
 #include <asm/io.h>
 #include <linux/errno.h>
+#if defined(CONFIG_SOC_KEYSTONE)
+#include <asm/ti-common/ti-gpmc.h>
+#else
 #include <asm/arch/mem.h>
+#endif
 #include <linux/mtd/omap_gpmc.h>
 #include <linux/mtd/nand_ecc.h>
 #include <linux/bch.h>
