@@ -110,6 +110,7 @@
  */
 #ifdef CONFIG_SPL_BUILD
 #undef CONFIG_TIMER
+#undef CONFIG_DM_NAND
 #endif
 
 #ifndef CONFIG_SPL_BUILD
