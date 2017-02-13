@@ -16,6 +16,10 @@
 #include <nand.h>
 #include <linux/mtd/omap_elm.h>
 
+#include <dm.h>
+
+DECLARE_GLOBAL_DATA_PTR;
+
 #define BADBLOCK_MARKER_LENGTH	2
 #define SECTOR_BYTES		512
 #define ECCCLEAR		(0x1 << 8)
@@ -46,10 +50,21 @@ struct omap_nand_info {
 	enum omap_ecc ecc_scheme;
 	uint8_t cs;
 	uint8_t ws;		/* wait status pin (0,1) */
+	uint8_t bus_width;	/* Bus width of NAND device */
 };
 
+#ifndef CONFIG_DM_NAND
 /* We are wasting a bit of memory but al least we are safe */
 static struct omap_nand_info omap_nand_info[GPMC_MAX_CS];
+
+#else
+
+struct omap_gpmc_platdata {
+	struct omap_nand_info *omap_nand_info;
+	struct gpmc *gpmc_cfg;
+	int max_cs;
+};
+#endif
 
 /*
  * omap_nand_hwcontrol - Set the address pointers corretly for the
@@ -945,6 +960,103 @@ int __maybe_unused omap_nand_switch_ecc(uint32_t hardware, uint32_t eccstrength)
 }
 #endif /* CONFIG_SPL_BUILD */
 
+
+static int omap_gpmc_get_default_cs(int max_cs)
+{
+	int cs = cs_next++;
+
+	/*
+	 * xloader/Uboot's gpmc configuration would have configured GPMC for
+	 * nand type of memory. The following logic scans and latches on to the
+	 * first CS with NAND type memory.
+	 */
+	while (cs < max_cs) {
+		/* Check if NAND type is set */
+		if ((readl(&gpmc_cfg->cs[cs].config1) & 0xC00) == 0x800) {
+			/* Found it!! */
+			break;
+		}
+		cs++;
+	}
+
+	if (cs >= max_cs) {
+		printf("nand: error: Unable to find NAND settings in GPMC Configuration - quitting\n");
+		return -ENODEV;
+	}
+
+	return cs;
+}
+
+#if !defined(CONFIG_NAND_OMAP_ECCSCHEME) && !defined(CONFIG_SYS_NAND_PAGE_SIZE)
+#define CONFIG_SYS_NAND_PAGE_SIZE	0
+#endif
+
+#if !defined(CONFIG_NAND_OMAP_ECCSCHEME) && !defined(CONFIG_SYS_NAND_OOBSIZE)
+#define CONFIG_SYS_NAND_OOBSIZE		0
+#endif
+
+static int omap_gpmc_init(struct nand_chip *nand,
+			  int cs, uint8_t bus_width, enum omap_ecc ecc_opt,
+			  const struct gpmc *gpmc_cfg,
+			  struct omap_nand_info *omap_nand_info)
+{
+	int32_t gpmc_config = 0;
+	int err = 0;
+
+	gpmc_config = readl(&gpmc_cfg->config);
+	/* Disable Write protect */
+	gpmc_config |= 0x10;
+	writel(gpmc_config, &gpmc_cfg->config);
+
+	nand->IO_ADDR_R = (void __iomem *)&gpmc_cfg->cs[cs].nand_dat;
+	nand->IO_ADDR_W = (void __iomem *)&gpmc_cfg->cs[cs].nand_cmd;
+	nand_set_controller_data(nand, omap_nand_info);
+	nand->cmd_ctrl	= omap_nand_hwcontrol;
+	nand->options	|= NAND_NO_PADDING | NAND_CACHEPRG;
+	nand->chip_delay = 100;
+	nand->ecc.layout = &omap_ecclayout;
+
+	/* configure driver and controller based on NAND device bus-width */
+	gpmc_config = readl(&gpmc_cfg->cs[cs].config1);
+	if (bus_width == 16) {
+		nand->options |= NAND_BUSWIDTH_16;
+		writel(gpmc_config | (0x1 << 12), &gpmc_cfg->cs[cs].config1);
+	} else {
+		nand->options &= ~NAND_BUSWIDTH_16;
+		writel(gpmc_config & ~(0x1 << 12), &gpmc_cfg->cs[cs].config1);
+	}
+
+	/* select ECC scheme */
+	if (ecc_opt != OMAP_ECC_HAM1_CODE_SW) {
+		err = omap_select_ecc_scheme(nand, ecc_opt,
+					     CONFIG_SYS_NAND_PAGE_SIZE,
+					     CONFIG_SYS_NAND_OOBSIZE);
+	} else {
+		/*
+		 * pagesize and oobsize are not required to
+		 * configure sw ecc-scheme
+		 */
+		err = omap_select_ecc_scheme(nand, ecc_opt, 0, 0);
+	}
+	if (err)
+		return err;
+
+#ifdef CONFIG_NAND_OMAP_GPMC_PREFETCH
+	nand->read_buf = omap_nand_read_prefetch;
+#else
+	if (nand->options & NAND_BUSWIDTH_16)
+		nand->read_buf = nand_read_buf16;
+	else
+		nand->read_buf = nand_read_buf;
+#endif
+
+	nand->dev_ready = omap_dev_ready;
+
+	return 0;
+}
+
+#ifndef CONFIG_DM_NAND
+
 /*
  * Board-specific NAND initialization. The following members of the
  * argument are board-specific:
@@ -962,77 +1074,163 @@ int __maybe_unused omap_nand_switch_ecc(uint32_t hardware, uint32_t eccstrength)
  */
 int board_nand_init(struct nand_chip *nand)
 {
-	int32_t gpmc_config = 0;
-	int cs = cs_next++;
-	int err = 0;
-	/*
-	 * xloader/Uboot's gpmc configuration would have configured GPMC for
-	 * nand type of memory. The following logic scans and latches on to the
-	 * first CS with NAND type memory.
-	 * TBD: need to make this logic generic to handle multiple CS NAND
-	 * devices.
-	 */
-	while (cs < GPMC_MAX_CS) {
-		/* Check if NAND type is set */
-		if ((readl(&gpmc_cfg->cs[cs].config1) & 0xC00) == 0x800) {
-			/* Found it!! */
-			break;
-		}
-		cs++;
-	}
-	if (cs >= GPMC_MAX_CS) {
-		printf("nand: error: Unable to find NAND settings in "
-			"GPMC Configuration - quitting\n");
-		return -ENODEV;
-	}
+	int cs;
+#if defined(CONFIG_SYS_NAND_BUSWIDTH_16BIT)
+	uint8_t bus_width = 16;
+#else
+	uint8_t bus_width = 8;
+#endif
+#if defined(CONFIG_NAND_OMAP_ECCSCHEME)
+	enum omap_ecc ecc_opt = CONFIG_NAND_OMAP_ECCSCHEME;
+#else
+	enum omap_ecc ecc_opt = OMAP_ECC_HAM1_CODE_SW;
+#endif
 
-	gpmc_config = readl(&gpmc_cfg->config);
-	/* Disable Write protect */
-	gpmc_config |= 0x10;
-	writel(gpmc_config, &gpmc_cfg->config);
+	cs = omap_gpmc_get_default_cs(GPMC_MAX_CS);
+	if (cs < 0)
+		return cs;
 
-	nand->IO_ADDR_R = (void __iomem *)&gpmc_cfg->cs[cs].nand_dat;
-	nand->IO_ADDR_W = (void __iomem *)&gpmc_cfg->cs[cs].nand_cmd;
 	omap_nand_info[cs].control = NULL;
 	omap_nand_info[cs].cs = cs;
 	omap_nand_info[cs].ws = wscfg[cs];
-	nand_set_controller_data(nand, &omap_nand_info[cs]);
-	nand->cmd_ctrl	= omap_nand_hwcontrol;
-	nand->options	|= NAND_NO_PADDING | NAND_CACHEPRG;
-	nand->chip_delay = 100;
-	nand->ecc.layout = &omap_ecclayout;
 
-	/* configure driver and controller based on NAND device bus-width */
-	gpmc_config = readl(&gpmc_cfg->cs[cs].config1);
-#if defined(CONFIG_SYS_NAND_BUSWIDTH_16BIT)
-	nand->options |= NAND_BUSWIDTH_16;
-	writel(gpmc_config | (0x1 << 12), &gpmc_cfg->cs[cs].config1);
-#else
-	nand->options &= ~NAND_BUSWIDTH_16;
-	writel(gpmc_config & ~(0x1 << 12), &gpmc_cfg->cs[cs].config1);
-#endif
-	/* select ECC scheme */
-#if defined(CONFIG_NAND_OMAP_ECCSCHEME)
-	err = omap_select_ecc_scheme(nand, CONFIG_NAND_OMAP_ECCSCHEME,
-			CONFIG_SYS_NAND_PAGE_SIZE, CONFIG_SYS_NAND_OOBSIZE);
-#else
-	/* pagesize and oobsize are not required to configure sw ecc-scheme */
-	err = omap_select_ecc_scheme(nand, OMAP_ECC_HAM1_CODE_SW,
-			0, 0);
-#endif
-	if (err)
-		return err;
+	return omap_gpmc_init(nand,
+			      cs,
+			      bus_width,
+			      ecc_opt,
+			      gpmc_cfg,
+			      &omap_nand_info[cs]);
+}
 
-#ifdef CONFIG_NAND_OMAP_GPMC_PREFETCH
-	nand->read_buf = omap_nand_read_prefetch;
-#else
-	if (nand->options & NAND_BUSWIDTH_16)
-		nand->read_buf = nand_read_buf16;
-	else
-		nand->read_buf = nand_read_buf;
-#endif
+#else /* CONFIG_DM_NAND */
 
-	nand->dev_ready = omap_dev_ready;
+static int omap_gpmc_probe(struct udevice *dev)
+{
+	struct nand_chip *nand = dev_get_priv(dev);
+	struct omap_gpmc_platdata *pdata = dev_get_platdata(dev);
+	struct gpmc *gpmc_cfg = pdata->gpmc_cfg;
+	int cs;
 
+	cs = omap_gpmc_get_default_cs(pdata->max_cs);
+	if (cs < 0)
+		return cs;
+
+	return omap_gpmc_init(nand,
+			      cs,
+			      pdata->omap_nand_info[cs].bus_width,
+			      pdata->omap_nand_info[cs].ecc_scheme,
+			      gpmc_cfg,
+			      &pdata->omap_nand_info[cs]);
+}
+
+static int omap_gpmc_get_ecc_opt(int node, int elm_node)
+{
+	const void *fdt = gd->fdt_blob;
+	const char *ecc_str;
+	int ecc_opt = -ENOENT;
+
+	ecc_str = fdt_getprop(fdt, node, "ti,nand-ecc-opt", NULL);
+	if (!ecc_str) {
+		error("DT entry for ti,nand-ecc-opt not found\n");
+		return -ENOENT;
+	}
+
+	if (!strcmp(ecc_str, "sw")) {
+		ecc_opt = OMAP_ECC_HAM1_CODE_SW;
+	} else if (!strcmp(ecc_str, "ham1") ||
+		   !strcmp(ecc_str, "hw") ||
+		   !strcmp(ecc_str, "hw-romcode")) {
+		ecc_opt = OMAP_ECC_HAM1_CODE_HW;
+	} else if (!strcmp(ecc_str, "bch4")) {
+		if (elm_node > 0)
+			ecc_opt = OMAP_ECC_BCH4_CODE_HW;
+		else
+			ecc_opt = OMAP_ECC_BCH4_CODE_HW_DETECTION_SW;
+	} else if (!strcmp(ecc_str, "bch8")) {
+		if (elm_node > 0)
+			ecc_opt = OMAP_ECC_BCH8_CODE_HW;
+		else
+			ecc_opt = OMAP_ECC_BCH8_CODE_HW_DETECTION_SW;
+	} else if (!strcmp(ecc_str, "bch16")) {
+		if (elm_node > 0)
+			ecc_opt = OMAP_ECC_BCH16_CODE_HW;
+		else
+			error("BCH16 requires ELM support\n");
+	} else {
+		error("ti,nand-ecc-opt invalid value\n");
+		return -EINVAL;
+	}
+
+	return ecc_opt;
+}
+
+static int omap_gpmc_ofdata_to_platdata(struct udevice *dev)
+{
+	struct omap_gpmc_platdata *pdata = dev_get_platdata(dev);
+	const void *fdt = gd->fdt_blob;
+	int node = dev->of_offset;
+	int subnode;
+
+	pdata->gpmc_cfg = map_physmem(dev_get_addr(dev), sizeof(struct gpmc),
+				      MAP_NOCACHE);
+	pdata->max_cs = fdtdec_get_int(fdt, node, "gpmc,num-cs", -1);
+	if (pdata->max_cs < 0) {
+		error("max chip select not found in DT\n");
+		return -ENOENT;
+	}
+
+	pdata->omap_nand_info = calloc(pdata->max_cs,
+				       sizeof(struct omap_nand_info));
+	if (!pdata->omap_nand_info)
+		return -ENOMEM;
+
+	fdt_for_each_subnode(subnode, fdt, node) {
+		int cs;
+		int len;
+		int elm_node;
+		const char *name;
+		struct omap_nand_info *nand_info;
+
+		name = fdt_get_name(fdt, subnode, &len);
+		if (strncmp(name, "nand", 4))
+			continue;
+
+		cs = fdtdec_get_int(fdt, subnode, "reg", -1);
+		if (cs < 0 || cs >= pdata->max_cs) {
+			error("Invalid cs for nand device\n");
+			return -EINVAL;
+		}
+		nand_info = &pdata->omap_nand_info[cs];
+		nand_info->cs = cs;
+		nand_info->ws = wscfg[cs];
+
+		/* get bus width 8 or 16, if not present 8 */
+		nand_info->bus_width = fdtdec_get_int(fdt, subnode,
+						      "nand-bus-width", 8);
+
+		elm_node = fdtdec_lookup_phandle(fdt, subnode, "ti,elm-id");
+
+		nand_info->ecc_scheme = omap_gpmc_get_ecc_opt(subnode,
+							      elm_node);
+		if (nand_info->ecc_scheme < 0)
+			return nand_info->ecc_scheme;
+	}
 	return 0;
 }
+
+static const struct udevice_id omap_gpmc_ids[] = {
+	{ .compatible = "ti,am3352-gpmc" },
+	{ }
+};
+
+U_BOOT_DRIVER(omap_gpmc) = {
+	.name	= "omap_gpmc",
+	.id	= UCLASS_NAND,
+	.of_match = omap_gpmc_ids,
+	.ofdata_to_platdata = omap_gpmc_ofdata_to_platdata,
+	.probe	= omap_gpmc_probe,
+	.priv_auto_alloc_size = sizeof(struct nand_chip),
+	.platdata_auto_alloc_size = sizeof(struct omap_gpmc_platdata),
+	.flags = DM_FLAG_ALLOC_PRIV_DMA,
+};
+#endif /* CONFIG_DM_NAND */
