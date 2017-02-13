@@ -684,6 +684,16 @@ struct nand_buffers {
  *			correctable).
  * @write_page:		[REPLACEABLE] High-level page write function
  */
+#ifdef CONFIG_DM_NAND
+/**
+ * DM compatible nand drivers must have struct nand_chip as
+ * the first part of their private data:
+ * U_BOOT_DRIVER(...) = {
+ *     ...
+ *             .priv_auto_alloc_size = sizeof(struct nand_chip),
+ * };
+ */
+#endif
 
 struct nand_chip {
 	struct mtd_info mtd;

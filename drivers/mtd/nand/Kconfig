@@ -1,5 +1,15 @@
 menu "NAND Device Support"
 
+config DM_NAND
+	bool "Enable driver model for NAND"
+	depends on DM
+	help
+	  Enable driver model for NAND. The NAND interface is then
+	  implemented by the NAND uclass. Multiple NAND devices can
+	  be attached and used. The 'nand' command works as normal.
+
+	  If the NAND drivers doesn't support DM, say N.
+
 config SYS_NAND_SELF_INIT
 	bool
 	help

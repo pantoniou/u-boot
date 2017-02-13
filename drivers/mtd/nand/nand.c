@@ -21,7 +21,7 @@ int nand_curr_device = -1;
 
 struct mtd_info *nand_info[CONFIG_SYS_MAX_NAND_DEVICE];
 
-#ifndef CONFIG_SYS_NAND_SELF_INIT
+#if !defined(CONFIG_SYS_NAND_SELF_INIT) && !defined(CONFIG_DM_NAND)
 static struct nand_chip nand_chip[CONFIG_SYS_MAX_NAND_DEVICE];
 static ulong base_address[CONFIG_SYS_MAX_NAND_DEVICE] = CONFIG_SYS_NAND_BASE_LIST;
 #endif
@@ -30,6 +30,7 @@ static char dev_name[CONFIG_SYS_MAX_NAND_DEVICE][8];
 
 static unsigned long total_nand_size; /* in kiB */
 
+#ifndef CONFIG_DM_NAND
 struct mtd_info *get_nand_dev_by_index(int dev)
 {
 	if (dev < 0 || dev >= CONFIG_SYS_MAX_NAND_DEVICE || !nand_info[dev] ||
@@ -38,6 +39,7 @@ struct mtd_info *get_nand_dev_by_index(int dev)
 
 	return nand_info[dev];
 }
+#endif
 
 int nand_mtd_to_devnum(struct mtd_info *mtd)
 {
@@ -57,8 +59,9 @@ int nand_register(int devnum, struct mtd_info *mtd)
 	if (devnum >= CONFIG_SYS_MAX_NAND_DEVICE)
 		return -EINVAL;
 
+#if !defined(CONFIG_SYS_NAND_SELF_INIT) && !defined(CONFIG_DM_NAND)
 	nand_info[devnum] = mtd;
-
+#endif
 	sprintf(dev_name[devnum], "nand%d", devnum);
 	mtd->name = dev_name[devnum];
 
@@ -81,18 +84,28 @@ int nand_register(int devnum, struct mtd_info *mtd)
 #ifndef CONFIG_SYS_NAND_SELF_INIT
 static void nand_init_chip(int i)
 {
+#ifndef CONFIG_DM_NAND
 	struct nand_chip *nand = &nand_chip[i];
 	struct mtd_info *mtd = nand_to_mtd(nand);
 	ulong base_addr = base_address[i];
+#else
+	struct mtd_info *mtd;
+#endif
 	int maxchips = CONFIG_SYS_NAND_MAX_CHIPS;
 
 	if (maxchips < 1)
 		maxchips = 1;
 
+#ifdef CONFIG_DM_NAND
+	mtd = get_nand_dev_by_index(i);
+	if (!mtd)
+		return;
+#else
 	nand->IO_ADDR_R = nand->IO_ADDR_W = (void  __iomem *)base_addr;
 
 	if (board_nand_init(nand))
 		return;
+#endif
 
 	if (nand_scan(mtd, maxchips))
 		return;
