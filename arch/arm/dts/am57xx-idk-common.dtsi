@@ -307,6 +307,11 @@
 	vmmc_aux-supply = <&ldo1_reg>;
 	bus-width = <4>;
 	cd-gpios = <&gpio6 27 GPIO_ACTIVE_LOW>; /* gpio 219 */
+	/delete-property/ sd-uhs-sdr104;
+	/delete-property/ sd-uhs-sdr50;
+	/delete-property/ sd-uhs-ddr50;
+	/delete-property/ sd-uhs-sdr25;
+	/delete-property/ sd-uhs-sdr12;
 };
 
 &mmc2 {
