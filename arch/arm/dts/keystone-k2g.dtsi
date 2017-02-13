@@ -204,5 +204,23 @@
 			status = "disabled";
 			clock-names = "fck";
 		};
+
+		gpmc: gpmc@21818000 {
+			compatible = "ti,am3352-gpmc";
+			#address-cells = <2>;
+			#size-cells = <1>;
+			reg = <0x21818000 0x400>;
+			interrupts = <GIC_SPI 196 IRQ_TYPE_EDGE_RISING>;
+			gpmc,num-cs = <4>;
+			gpmc,num-waitpins = <2>;
+			status = "disabled";
+		 };
+
+		elm: elm@021c8000 {
+			compatible = "ti,am3352-elm";
+			reg = <0x021c8000 0x2000>;
+			interrupts = <GIC_SPI 197 IRQ_TYPE_EDGE_RISING>;
+			status = "disabled";
+		 };
 	};
 };

@@ -116,3 +116,62 @@
 &i2c1 {
 	status = "okay";
 };
+
+&gpmc {
+	status = "okay";
+	ranges = <0 0 0x30000000 0x01000000>;	/* CS0 space. Min partition = 16MB */
+	nand@0,0 {
+		compatible = "ti,omap2-nand";
+		reg = <0 0 4>;			/* CS0, I/O window 4 bytes */
+		interrupts = <GIC_SPI 196 IRQ_TYPE_EDGE_RISING>;
+		ti,nand-ecc-opt = "bch16";
+		ti,elm-id = <&elm>;
+		nand-bus-width = <16>;
+		gpmc,device-width = <2>;
+		gpmc,sync-clk-ps = <0>;
+		gpmc,cs-on-ns = <0>;
+		gpmc,cs-rd-off-ns = <40>;
+		gpmc,cs-wr-off-ns = <40>;
+		gpmc,adv-on-ns = <0>;
+		gpmc,adv-rd-off-ns = <25>;
+		gpmc,adv-wr-off-ns = <25>;
+		gpmc,we-on-ns = <0>;
+		gpmc,we-off-ns = <20>;
+		gpmc,oe-on-ns = <3>;
+		gpmc,oe-off-ns = <30>;
+		gpmc,access-ns = <30>;
+		gpmc,rd-cycle-ns = <40>;
+		gpmc,wr-cycle-ns = <40>;
+		gpmc,wait-pin = <0>;
+		gpmc,bus-turnaround-ns = <0>;
+		gpmc,cycle2cycle-delay-ns = <0>;
+		gpmc,clk-activation-ns = <0>;
+		gpmc,wait-monitoring-ns = <0>;
+		gpmc,wr-access-ns = <40>;
+		gpmc,wr-data-mux-bus-ns = <0>;
+		/* MTD partition table */
+		/* All SPL-* partitions are sized to minimal length
+		 * which can be independently programmable. For
+		 * NAND flash this is equal to size of erase-block
+		 */
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		nand-on-flash-bbt;
+		/* MT29F2G16ABAFAWP - 256MB */
+		partition@0 {
+			label = "u-boot";
+			reg = <0x0 0x100000>;
+			read-only;
+		};
+		partition@100000 {
+			label = "params";
+			reg = <0x100000 0x80000>;
+		};
+
+		partition@180000 {
+			label = "ubifs";
+			reg = <0x180000 0xfe80000>;
+		};
+	};
+};
