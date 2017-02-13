@@ -979,9 +979,13 @@ int board_fit_config_name_match(const char *name)
 		} else if (!strcmp(name, "am57xx-beagle-x15")) {
 			return 0;
 		}
-	} else if (board_is_am572x_evm() &&
-		   !strcmp(name, "am57xx-beagle-x15")) {
-		return 0;
+	} else if (board_is_am572x_evm()) {
+		if (board_is_am572x_evm_reva3()) {
+			if (!strcmp(name, "am57xx-evm-reva3"))
+				return 0;
+		} else if (!strcmp(name, "am57xx-beagle-x15")) {
+			return 0;
+		}
 	} else if (board_is_am572x_idk() && !strcmp(name, "am572x-idk")) {
 		return 0;
 	} else if (board_is_am571x_idk() && !strcmp(name, "am571x-idk")) {
