@@ -10,6 +10,7 @@
 /dts-v1/;
 
 #include "keystone-k2g.dtsi"
+#include <dt-bindings/net/ti-dp83867.h>
 
 / {
 	compatible = "ti,k2g-ice", "ti,k2g", "ti,keystone";
@@ -70,4 +71,23 @@
 			reg = <0x00a00000 0x1600000>;
 		};
 	};
+};
+
+&netcp {
+	status = "okay";
+};
+
+&mdio {
+	status = "okay";
+	ethphy0: ethernet-phy@0 {
+		reg = <0>;
+		ti,rx-internal-delay = <DP83867_RGMIIDCTL_2_25_NS>;
+		ti,fifo-depth = <DP83867_PHYCR_FIFO_DEPTH_8_B_NIB>;
+		ti,min-output-impedance;
+	};
+};
+
+&gbe0 {
+	phy-handle = <&ethphy0>;
+	phy-mode = "rgmii-rxid";
 };
