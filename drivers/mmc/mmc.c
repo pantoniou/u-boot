@@ -2269,12 +2269,7 @@ void mmc_set_preinit(struct mmc *mmc, int preinit)
 	mmc->preinit = preinit;
 }
 
-#if defined(CONFIG_DM_MMC) && defined(CONFIG_SPL_BUILD)
-static int mmc_probe(bd_t *bis)
-{
-	return 0;
-}
-#elif defined(CONFIG_DM_MMC)
+#if defined(CONFIG_DM_MMC)
 static int mmc_probe(bd_t *bis)
 {
 	int ret, i;

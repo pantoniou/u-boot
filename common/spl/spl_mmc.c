@@ -7,7 +7,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
-#include <dm.h>
+#include <libfdt.h>
 #include <spl.h>
 #include <linux/compiler.h>
 #include <errno.h>
@@ -115,9 +115,6 @@ int spl_mmc_get_device_index(u32 boot_device)
 
 static int spl_mmc_find_device(struct mmc **mmcp, u32 boot_device)
 {
-#ifdef CONFIG_DM_MMC
-	struct udevice *dev;
-#endif
 	int err, mmc_dev;
 
 	mmc_dev = spl_mmc_get_device_index(boot_device);
@@ -132,14 +129,9 @@ static int spl_mmc_find_device(struct mmc **mmcp, u32 boot_device)
 		return err;
 	}
 
-#ifdef CONFIG_DM_MMC
-	err = uclass_get_device(UCLASS_MMC, mmc_dev, &dev);
-	if (!err)
-		*mmcp = mmc_get_mmc_dev(dev);
-#else
 	*mmcp = find_mmc_device(mmc_dev);
 	err = *mmcp ? 0 : -ENODEV;
-#endif
+
 	if (err) {
 #ifdef CONFIG_SPL_LIBCOMMON_SUPPORT
 		printf("spl: could not find mmc device. error: %d\n", err);
