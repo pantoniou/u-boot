@@ -136,5 +136,5 @@
 				}
 #define CONFIG_SYS_NAND_ECCSIZE         512
 #define CONFIG_SYS_NAND_ECCBYTES        26
-
+#define CONFIG_PHY_TI
 #endif /* __CONFIG_K2G_EVM_H */
