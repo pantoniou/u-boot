@@ -64,6 +64,11 @@ int env_init(void)
 	/* use default */
 	gd->env_addr	= (ulong)&default_environment[0];
 	gd->env_valid	= 1;
+	/*
+	 * intialize the MMC sub-system. This will probe the
+	 * MMC controllers if not already done
+	 */
+	mmc_initialize(NULL);
 
 	return 0;
 }

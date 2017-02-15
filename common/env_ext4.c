@@ -43,6 +43,10 @@ int env_init(void)
 	gd->env_addr = (ulong)&default_environment[0];
 	gd->env_valid = 1;
 
+	/* intialize the MMC sub-system if env is stored on a MMC*/
+	if (!strcmp(EXT4_ENV_INTERFACE, "mmc"))
+		mmc_initialize(NULL);
+
 	return 0;
 }
 
