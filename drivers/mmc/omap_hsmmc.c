@@ -106,7 +106,6 @@ struct omap_hsmmc_data {
 	struct udevice *vmmc_supply;
 	struct udevice *vmmc_aux_supply;
 	ushort last_cmd;
-	uint signal_voltage;
 #ifdef CONFIG_IODELAY_RECALIBRATION
 	struct omap_hsmmc_pinctrl_state *default_pinctrl_state;
 	struct omap_hsmmc_pinctrl_state *hs_pinctrl_state;
@@ -119,6 +118,7 @@ struct omap_hsmmc_data {
 	struct omap_hsmmc_pinctrl_state *sdr12_pinctrl_state;
 #endif
 #endif
+	uint signal_voltage;
 };
 
 #ifdef CONFIG_DM_MMC
@@ -364,6 +364,7 @@ static void omap_hsmmc_set_timing(struct mmc *mmc)
 	priv->timing = mmc->timing;
 }
 #endif
+#endif
 
 static void omap_hsmmc_conf_bus_power(struct mmc *mmc, uint signal_voltage)
 {
@@ -390,6 +391,7 @@ static void omap_hsmmc_conf_bus_power(struct mmc *mmc, uint signal_voltage)
 	writel(val, &mmc_base->hctl);
 }
 
+#if defined(CONFIG_DM_MMC)
 static int omap_hsmmc_card_busy_low(struct mmc *mmc)
 {
 	u32 val;
@@ -473,7 +475,7 @@ static int omap_hsmmc_card_busy(struct mmc *mmc)
 	return ret;
 }
 
-#ifdef CONFIG_DM_REGULATOR
+#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
 static int omap_hsmmc_set_io_regulator(struct mmc *mmc, int uV)
 {
 	int ret;
@@ -497,6 +499,7 @@ static int omap_hsmmc_set_io_regulator(struct mmc *mmc, int uV)
 	return 0;
 }
 #endif
+#endif
 
 static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 {
@@ -519,7 +522,7 @@ static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 		writel(val, &mmc_base->ac12);
 
 #if defined(CONFIG_OMAP54XX) && defined(CONFIG_PALMAS_POWER)
-#ifdef CONFIG_DM_REGULATOR
+#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
 		return omap_hsmmc_set_io_regulator(mmc, 3000000);
 #else
 		vmmc_pbias_config(LDO_VOLT_3V0);
@@ -537,7 +540,7 @@ static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 		writel(val, &mmc_base->ac12);
 
 #if defined(CONFIG_OMAP54XX) && defined(CONFIG_PALMAS_POWER)
-#ifdef CONFIG_DM_REGULATOR
+#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
 		return omap_hsmmc_set_io_regulator(mmc, 1800000);
 #else
 		vmmc_pbias_config(LDO_VOLT_1V8);
@@ -550,6 +553,7 @@ static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 	return 0;
 }
 
+#if defined(CONFIG_DM_MMC)
 static void omap_hsmmc_set_capabilities(struct mmc *mmc)
 {
 	struct hsmmc *mmc_base;
@@ -691,7 +695,7 @@ tuning_error:
 	return ret;
 }
 
-#ifdef CONFIG_DM_REGULATOR
+#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
 static int omap_hsmmc_set_vdd(struct mmc *mmc, bool enable)
 {
 	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
@@ -1343,14 +1347,12 @@ static int omap_hsmmc_set_ios(struct udevice *dev)
 	else
 		omap_hsmmc_start_clock(mmc_base);
 
-#ifdef CONFIG_DM_MMC
-#ifdef CONFIG_IODELAY_RECALIBRATION
+#if defined(CONFIG_DM_MMC) && defined(CONFIG_IODELAY_RECALIBRATION)
 	if (priv_data->timing != mmc->timing)
 		omap_hsmmc_set_timing(mmc);
 #endif
 	if (priv_data->signal_voltage != mmc->signal_voltage)
 		ret = omap_hsmmc_set_signal_voltage(mmc);
-#endif
 
 	return ret;
 }
@@ -1435,7 +1437,7 @@ static const struct mmc_ops omap_hsmmc_ops = {
 #ifdef CONFIG_DM_MMC
 	.execute_tuning = omap_hsmmc_execute_tuning,
 	.card_busy = omap_hsmmc_card_busy,
-#ifdef CONFIG_DM_REGULATOR
+#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
 	.set_vdd	= omap_hsmmc_set_vdd,
 #endif
 #endif
@@ -1906,7 +1908,7 @@ static int omap_hsmmc_probe(struct udevice *dev)
 
 	omap_hsmmc_platform_fixup(mmc);
 
-#ifdef CONFIG_DM_REGULATOR
+#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
 	device_get_supply_regulator(dev, "vmmc-supply", &priv->vmmc_supply);
 	device_get_supply_regulator(dev, "vmmc_aux-supply",
 				    &priv->vmmc_aux_supply);
