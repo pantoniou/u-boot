@@ -15,9 +15,29 @@
 /* Platform type */
 #define CONFIG_SOC_K2E
 
+#ifdef CONFIG_TI_SECURE_DEVICE
+#define DEFAULT_SEC_BM_BOOT_ENV						\
+	"addr_sec_bm=0xc08000\0"					\
+	"addr_sec_bm_mkimg=0xc07ffc0\0"					\
+	"sec_bm_size=0x1210\0"						\
+	"fit_bootfile=fitImage.itb\0"					\
+	"update_to_fit=setenv bootfile ${fit_bootfile}\0"		\
+	"sec_bm_copy=go ${addr_sec_bm}4 0xc084000 ${sec_bm_size}\0"	\
+	"findfdt=setenv fdtfile ${name_fdt}\0"
+
+#define CONFIG_BOOTCOMMAND						\
+	"run sec_bm_copy; mon_install ${addr_sec_bm_mkimg};"		\
+	"run update_to_fit; run findfdt;"				\
+	"dhcp ${loadaddr} ${tftp_root}/${bootfile};"			\
+	"run args_all; run args_ramfs; bootm ${loadaddr}#${fdtfile}"
+#else
+#define DEFAULT_SEC_BM_BOOT_ENV
+#endif
+
 /* U-Boot general configuration */
 #define CONFIG_EXTRA_ENV_KS2_BOARD_SETTINGS				\
 	DEFAULT_FW_INITRAMFS_BOOT_ENV					\
+	DEFAULT_SEC_BM_BOOT_ENV						\
 	"boot=ubi\0"							\
 	"args_ubi=setenv bootargs ${bootargs} rootfstype=ubifs "	\
 	"root=ubi0:rootfs rootflags=sync rw ubi.mtd=ubifs,2048\0"	\
