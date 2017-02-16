@@ -104,6 +104,15 @@
 #undef CONFIG_USB_GADGET_DUALSPEED
 #endif
 
+#if !defined(CONFIG_SPL_BUILD) || \
+	(defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_USBETH_SUPPORT))
+#define CONFIG_USB_ETHER
+#define CONFIG_USB_ETH_RNDIS
+#define CONFIG_USBNET_HOST_ADDR "de:ad:be:af:00:00"
+#endif
+
+#define CONFIG_SPL_LOAD_FIT_ADDRESS 0x80800000
+
 /*
  * Disable MMC DM for SPL build and can be re-enabled after adding
  * DM support in SPL
@@ -111,6 +120,11 @@
 #ifdef CONFIG_SPL_BUILD
 #undef CONFIG_TIMER
 #undef CONFIG_DM_NAND
+#endif
+
+#if (defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_USBETH_SUPPORT))
+#undef CONFIG_ENV_IS_IN_FAT
+#define CONFIG_ENV_IS_NOWHERE
 #endif
 
 #ifndef CONFIG_SPL_BUILD
