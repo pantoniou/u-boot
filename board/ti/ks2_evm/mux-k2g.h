@@ -327,6 +327,14 @@ struct pin_cfg k2g_ice_evm_pin_cfg[] = {
 	{ 70, MODE(0) | PIN_PTU },	/* MMC1_SDWP.MMC1_SDWP */
 	{ 71, MODE(0) | PIN_PTD },	/* MMC1_POW.MMC1_POW   */
 
+	/* QSPI */
+	{ 129,	MODE(0) },	/* SOC_QSPI_CLK */
+	{ 130,	MODE(0) },	/* SOC_QSPI_RTCLK */
+	{ 131,	MODE(0) },	/* SOC_QSPI_D0 */
+	{ 132,	MODE(0) },	/* SOC_QSPI_D1 */
+	{ 133,	MODE(0) },	/* SOC_QSPI_D2 */
+	{ 134,	MODE(0) },	/* SOC_QSPI_D3 */
+	{ 135,	MODE(0) },	/* SOC_QSPI_CSN0 */
 	{ MAX_PIN_N, }
 };
 
