@@ -353,6 +353,9 @@ struct pin_cfg k2g_ice_evm_pin_cfg[] = {
 	{ 99, MODE(0) },		/* MDIO_CLK.MDIO_CLK    */
 	{ 10, MODE(3) },		/* GPMC_AD10.GPIO0_10   */
 
+	/* ICSS1 Padconf Workaround */
+	{ 202, MODE(1) | PIN_PDIS },    /* PR1_PRU1_GPO1.PR1_PRU1_GPI1 (PR1_MII1_RXD1) */
+
 	{ MAX_PIN_N, }
 };
 
