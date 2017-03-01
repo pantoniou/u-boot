@@ -221,6 +221,9 @@ int arch_misc_init(void)
 	if (ret || !dev)
 		return ret;
 
+	ret = uclass_first_device(UCLASS_USB_DEV_GENERIC, &dev);
+	if (ret)
+		return ret;
 #if defined(CONFIG_DM_ETH) && defined(CONFIG_USB_ETHER)
 	ret = usb_ether_init();
 	if (ret) {
