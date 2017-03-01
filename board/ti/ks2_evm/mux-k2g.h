@@ -21,6 +21,10 @@ struct pin_cfg k2g_generic_pin_cfg[] = {
 	/* I2C 0 */
 	{ 223,  MODE(0) },      /* SOC_I2C0_SCL */
 	{ 224,  MODE(0) },      /* SOC_I2C0_SDA */
+
+	/* I2C 1 */
+	{ 225,  MODE(0) },      /* SOC_I2C1_SCL */
+	{ 226,  MODE(0) },      /* SOC_I2C1_SDA */
 	{ MAX_PIN_N, }
 };
 
