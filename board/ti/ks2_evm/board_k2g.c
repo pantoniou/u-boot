@@ -12,8 +12,11 @@
 #include <asm/arch/psc_defs.h>
 #include <asm/arch/mmc_host_def.h>
 #include <fdtdec.h>
+#include <i2c.h>
 #include "mux-k2g.h"
 #include "../common/board_detect.h"
+
+#define K2G_GP_AUDIO_CODEC_ADDRESS	0x1B
 
 const unsigned int sysclk_array[MAX_SYSCLK] = {
 	19200000,
@@ -230,6 +233,23 @@ int board_fit_config_name_match(const char *name)
 #endif
 
 #if defined(CONFIG_DTB_RESELECT)
+static int alt_board_detect(void)
+{
+	int rc;
+
+	rc = i2c_set_bus_num(1);
+	if (rc)
+		return rc;
+
+	rc = i2c_probe(K2G_GP_AUDIO_CODEC_ADDRESS);
+	if (rc)
+		return rc;
+
+	ti_i2c_eeprom_am_set("66AK2GGP", "1.0X");
+
+	return 0;
+}
+
 static void k2g_reset_mux_config(void)
 {
 	/* Unlock the reset mux register */
@@ -249,8 +269,11 @@ int embedded_dtb_select(void)
 	rc = ti_i2c_eeprom_am_get(CONFIG_EEPROM_BUS_ADDRESS,
 			CONFIG_EEPROM_CHIP_ADDRESS);
 	if (rc) {
-		printf("EEPROM read failed. Unable to do board detection\n");
-		return -1;
+		rc = alt_board_detect();
+		if (rc) {
+			printf("Unable to do board detection\n");
+			return -1;
+		}
 	}
 
 	fdtdec_setup();
