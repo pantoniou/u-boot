@@ -122,11 +122,6 @@
 #undef CONFIG_DM_NAND
 #endif
 
-#if (defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_USBETH_SUPPORT))
-#undef CONFIG_ENV_IS_IN_FAT
-#define CONFIG_ENV_IS_NOWHERE
-#endif
-
 #ifndef CONFIG_SPL_BUILD
 /* USB Device Firmware Update support */
 #define DFUARGS \
