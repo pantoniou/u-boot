@@ -17,19 +17,15 @@
 
 #ifdef CONFIG_TI_SECURE_DEVICE
 #define DEFAULT_SEC_BM_BOOT_ENV						\
-	"addr_sec_bm=0xc08000\0"					\
-	"addr_sec_bm_mkimg=0xc07ffc0\0"					\
-	"sec_bm_size=0x1210\0"						\
-	"fit_bootfile=fitImage.itb\0"					\
-	"update_to_fit=setenv bootfile ${fit_bootfile}\0"		\
-	"sec_bm_copy=go ${addr_sec_bm}4 0xc084000 ${sec_bm_size}\0"	\
+	"addr_msb_non_sec_bm=0xc08000\0"				\
+	"addr_non_sec_bm_mkimg=0xc07ffc0\0"				\
+	"sec_copy_loop_size=0x1210\0"					\
+	"addr_sec_copy_loop=0x0c084000\0"				\
+	DEFAULT_FIT_TI_ARGS						\
+	"sec_bm_copy=go ${addr_msb_non_sec_bm}4 "			\
+			"${addr_sec_copy_loop} ${sec_copy_loop_size}\0"	\
 	"findfdt=setenv fdtfile ${name_fdt}\0"
 
-#define CONFIG_BOOTCOMMAND						\
-	"run sec_bm_copy; mon_install ${addr_sec_bm_mkimg};"		\
-	"run update_to_fit; run findfdt;"				\
-	"dhcp ${loadaddr} ${tftp_root}/${bootfile};"			\
-	"run args_all; run args_ramfs; bootm ${loadaddr}#${fdtfile}"
 #else
 #define DEFAULT_SEC_BM_BOOT_ENV
 #endif

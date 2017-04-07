@@ -262,7 +262,13 @@
 	"get_kern_ubi=ubifsload ${loadaddr} ${bootdir}/${name_kern}\0"		\
 	"get_mon_net=dhcp ${addr_mon} ${tftp_root}/${name_mon}\0"	\
 	"get_mon_nfs=nfs ${addr_mon} ${nfs_root}/boot/${name_mon}\0"	\
-	"get_mon_ubi=ubifsload ${addr_mon} ${bootdir}/${name_mon}\0"		\
+	"get_mon_ubi=ubifsload ${addr_mon} ${bootdir}/${name_mon}\0"	\
+	"get_fit_net=dhcp ${fit_loadaddr} ${tftp_root}"			\
+						"/${fit_bootfile}\0"	\
+	"get_fit_nfs=nfs ${fit_loadaddr} ${nfs_root}/boot/${fit_bootfile}\0"\
+	"get_fit_ubi=ubifsload ${fit_loadaddr} ${bootdir}/${fit_bootfile}\0"\
+	"get_fit_mmc=load mmc ${bootpart} ${fit_loadaddr} "		\
+					"${bootdir}/${fit_bootfile}\0"	\
 	"get_uboot_net=dhcp ${loadaddr} ${tftp_root}/${name_uboot}\0"	\
 	"get_uboot_nfs=nfs ${loadaddr} ${nfs_root}/boot/${name_uboot}\0" \
 	"burn_uboot_spi=sf probe; sf erase 0 0x90000; "		\
@@ -278,6 +284,8 @@
 	"get_fdt_ramfs=dhcp ${fdtaddr} ${tftp_root}/${name_fdt}\0"	\
 	"get_kern_ramfs=dhcp ${loadaddr} ${tftp_root}/${name_kern}\0"	\
 	"get_mon_ramfs=dhcp ${addr_mon} ${tftp_root}/${name_mon}\0"	\
+	"get_fit_ramfs=dhcp ${fit_loadaddr} ${tftp_root}"		\
+						"/${fit_bootfile}\0"	\
 	"get_fs_ramfs=dhcp ${rdaddr} ${tftp_root}/${name_fs}\0"	\
 	"get_ubi_net=dhcp ${addr_ubi} ${tftp_root}/${name_ubi}\0"	\
 	"get_ubi_nfs=nfs ${addr_ubi} ${nfs_root}/boot/${name_ubi}\0"	\
@@ -292,9 +300,16 @@
 		"1024k(bootloader)ro,512k(params)ro,-(ubifs)\0"
 
 #ifndef CONFIG_BOOTCOMMAND
+#ifndef CONFIG_TI_SECURE_DEVICE
 #define CONFIG_BOOTCOMMAND						\
 	"run init_${boot} get_mon_${boot} run_mon init_fw_rd_${boot} "	\
 	"get_fdt_${boot} get_kern_${boot} run_kern"
+#else
+#define CONFIG_BOOTCOMMAND						\
+	"run sec_bm_copy; mon_install ${addr_non_sec_bm_mkimg};"	\
+	"run init_${boot} init_fw_rd_${boot} get_fit_${boot};"		\
+	"bootm ${fit_loadaddr}#${name_fdt}"
+#endif
 #endif
 
 #define CONFIG_BOOTARGS							\
