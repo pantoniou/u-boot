@@ -15,9 +15,24 @@
 /* Platform type */
 #define CONFIG_SOC_K2HK
 
+#ifdef CONFIG_TI_SECURE_DEVICE
+#define DEFAULT_SEC_BM_BOOT_ENV						\
+	"addr_msb_non_sec_bm=0xc08800\0"				\
+	"addr_non_sec_bm_mkimg=0xc087fc0\0"				\
+	"sec_copy_loop_size=0x1210\0"					\
+	"addr_sec_copy_loop=0x0c08c000\0"				\
+	DEFAULT_FIT_TI_ARGS						\
+	"sec_bm_copy=go ${addr_msb_non_sec_bm}4 "			\
+		"${addr_sec_copy_loop} ${sec_copy_loop_size}\0"		\
+	"findfdt=setenv fdtfile ${name_fdt}\0"
+#else
+#define DEFAULT_SEC_BM_BOOT_ENV
+#endif
+
 /* U-Boot general configuration */
 #define CONFIG_EXTRA_ENV_KS2_BOARD_SETTINGS				\
 	DEFAULT_FW_INITRAMFS_BOOT_ENV					\
+	DEFAULT_SEC_BM_BOOT_ENV						\
 	"boot=ubi\0"							\
 	"args_ubi=setenv bootargs ${bootargs} rootfstype=ubifs "	\
 	"root=ubi0:rootfs rootflags=sync rw ubi.mtd=ubifs,2048\0"	\
