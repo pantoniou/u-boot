@@ -292,6 +292,50 @@ void mmc_init_stream(struct hsmmc *mmc_base)
 
 #ifdef CONFIG_DM_MMC
 #ifdef CONFIG_IODELAY_RECALIBRATION
+#ifdef DEBUG
+static inline void show_mmc_timing(struct mmc *mmc)
+{
+	const char *str;
+	switch (mmc->timing) {
+	case MMC_TIMING_MMC_HS200:
+		str = "HS200";
+		break;
+	case MMC_TIMING_UHS_SDR104:
+		str = "SDR104";
+		break;
+	case MMC_TIMING_UHS_DDR50:
+		str = "DDR50";
+		break;
+	case MMC_TIMING_UHS_SDR50:
+		str = "SDR50";
+		break;
+	case MMC_TIMING_UHS_SDR25:
+		str = "SDR25";
+		break;
+	case MMC_TIMING_UHS_SDR12:
+		str = "SDR12";
+		break;
+	case MMC_TIMING_SD_HS:
+		str = "HS(sd)";
+		break;
+	case MMC_TIMING_MMC_HS:
+		str = "HS(mmc)";
+		break;
+	case MMC_TIMING_MMC_DDR52:
+		str = "DDR52";
+		break;
+	default:
+		str = "std";
+		break;
+	}
+	printf("mmc %d mode %s\n", mmc->block_dev.devnum + 1, str);
+}
+#else
+static inline void show_mmc_timing(struct mmc *mmc)
+{
+}
+#endif
+
 static void omap_hsmmc_set_timing(struct mmc *mmc)
 {
 	u32 val;
@@ -362,6 +406,7 @@ static void omap_hsmmc_set_timing(struct mmc *mmc)
 
 	omap_hsmmc_start_clock(mmc_base);
 	priv->timing = mmc->timing;
+	show_mmc_timing(mmc);
 }
 #endif
 #endif
