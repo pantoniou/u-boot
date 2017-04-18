@@ -1546,9 +1546,9 @@ omap_hsmmc_get_pad_conf_entry(const fdt32_t *pinctrl, int count)
 	}
 
 	while (index < count) {
-		padconf[index].offset = fdt32_to_cpu(pinctrl[index]);
-		padconf[index].val = fdt32_to_cpu(pinctrl[index + 1]);
-		index += 2;
+		padconf[index].offset = fdt32_to_cpu(*pinctrl++);
+		padconf[index].val = fdt32_to_cpu(*pinctrl++);
+		index++;
 	}
 
 	return padconf;
@@ -1567,10 +1567,10 @@ omap_hsmmc_get_iodelay_cfg_entry(const fdt32_t *pinctrl, int count)
 	}
 
 	while (index < count) {
-		iodelay[index].offset = fdt32_to_cpu(pinctrl[index]);
-		iodelay[index].a_delay = fdt32_to_cpu(pinctrl[index + 1]);
-		iodelay[index].g_delay = fdt32_to_cpu(pinctrl[index + 2]);
-		index += 3;
+		iodelay[index].offset = fdt32_to_cpu(*pinctrl++);
+		iodelay[index].a_delay = fdt32_to_cpu(*pinctrl++);
+		iodelay[index].g_delay = fdt32_to_cpu(*pinctrl++);
+		index++;
 	}
 
 	return iodelay;
@@ -1659,7 +1659,7 @@ omap_hsmmc_get_pad_conf(struct mmc *mmc, char *prop_name, int *npads)
 	if (!pinctrl)
 		return ERR_PTR(-EINVAL);
 
-	count = len / sizeof(*pinctrl);
+	count = (len / sizeof(*pinctrl)) / 2;
 	padconf = omap_hsmmc_get_pad_conf_entry(pinctrl, count);
 	if (!padconf)
 		return ERR_PTR(-EINVAL);
@@ -1688,7 +1688,7 @@ omap_hsmmc_get_iodelay(struct mmc *mmc, char *prop_name, int *niodelay)
 	if (!pinctrl)
 		return ERR_PTR(-EINVAL);
 
-	count = len / sizeof(*pinctrl);
+	count = (len / sizeof(*pinctrl)) / 3;
 	iodelay = omap_hsmmc_get_iodelay_cfg_entry(pinctrl, count);
 	if (!iodelay)
 		return ERR_PTR(-EINVAL);
