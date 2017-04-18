@@ -35,6 +35,13 @@ struct pad_conf_entry {
 	u32 val;
 };
 
+struct omap_hsmmc_pinctrl_state {
+	struct pad_conf_entry *padconf;
+	int npads;
+	struct iodelay_cfg_entry *iodelay;
+	int niodelays;
+};
+
 struct omap_sysinfo {
 	char *board_string;
 };

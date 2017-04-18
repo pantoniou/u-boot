@@ -67,15 +67,6 @@ struct omap2_mmc_platform_config {
 	u8 controller_flags;
 };
 
-#ifdef CONFIG_IODELAY_RECALIBRATION
-struct omap_hsmmc_pinctrl_state {
-	struct pad_conf_entry *padconf;
-	int npads;
-	struct iodelay_cfg_entry *iodelay;
-	int niodelays;
-};
-#endif
-
 struct omap_hsmmc_data {
 	struct hsmmc *base_addr;
 #ifndef CONFIG_DM_MMC
@@ -1578,6 +1569,27 @@ int omap_mmc_init(int dev_index, uint host_caps_mask, uint f_max, int cd_gpio,
 }
 #else
 #ifdef CONFIG_IODELAY_RECALIBRATION
+#ifdef CONFIG_SPL_BUILD
+__weak struct omap_hsmmc_pinctrl_state *platform_fixup_get_pinctrl_by_mode
+				(struct hsmmc *base, const char *mode)
+{
+	static struct omap_hsmmc_pinctrl_state empty = {
+		.padconf = NULL,
+		.npads = 0,
+		.iodelay = NULL,
+		.niodelays = 0,
+	};
+	return &empty;
+}
+
+static struct omap_hsmmc_pinctrl_state *
+omap_hsmmc_get_pinctrl_by_mode(struct mmc *mmc, char *mode)
+{
+	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+
+	return platform_fixup_get_pinctrl_by_mode(priv->base_addr, mode);
+}
+#else
 static struct pad_conf_entry *
 omap_hsmmc_get_pad_conf_entry(const fdt32_t *pinctrl, int count)
 {
@@ -1794,6 +1806,7 @@ err_pinctrl_state:
 	kfree(pinctrl_state);
 	return 0;
 }
+#endif
 
 #define OMAP_HSMMC_SETUP_PINCTRL(capmask, mode)				\
 	do {								\
