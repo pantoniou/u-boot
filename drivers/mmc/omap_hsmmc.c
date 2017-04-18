@@ -1720,9 +1720,9 @@ omap_hsmmc_get_pinctrl_by_mode(struct mmc *mmc, char *mode)
 
 	index = fdt_stringlist_search(fdt, node, "pinctrl-names", mode);
 	if (index < 0) {
-		printf("%s: fail to find %s mode %s\n",
-		       fdt_get_name(fdt, node, NULL),
-		       mode, fdt_strerror(index));
+		debug("%s: fail to find %s mode %s\n",
+		      fdt_get_name(fdt, node, NULL),
+		      mode, fdt_strerror(index));
 		goto err_pinctrl_state;
 	}
 
@@ -1766,7 +1766,7 @@ err_pinctrl_state:
 			s = omap_hsmmc_get_pinctrl_by_mode(mmc, #mode);	\
 									\
 		if (!s) {						\
-			printf("no pinctrl for %s\n", #mode);		\
+			debug("no pinctrl for %s\n", #mode);		\
 			cfg->host_caps &= ~(capmask);			\
 		} else {						\
 			priv->mode##_pinctrl_state = s;			\
@@ -1784,7 +1784,7 @@ static int omap_hsmmc_get_pinctrl_state(struct mmc *mmc)
 
 	default_pinctrl = omap_hsmmc_get_pinctrl_by_mode(mmc, "default");
 	if (!default_pinctrl) {
-		printf("no pinctrl state for default mode\n");
+		debug("no pinctrl state for default mode\n");
 		return -EINVAL;
 	}
 
