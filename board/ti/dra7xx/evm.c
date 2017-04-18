@@ -712,6 +712,79 @@ int board_mmc_init(bd_t *bis)
 #endif
 
 #ifdef CONFIG_OMAP_HSMMC
+#if defined(CONFIG_IODELAY_RECALIBRATION) && defined(CONFIG_SPL_BUILD)
+
+struct pinctrl_desc {
+	const char *name;
+	struct omap_hsmmc_pinctrl_state *pinctrl;
+};
+
+static struct pinctrl_desc pinctrl_descs_hsmmc1[] = {
+	{"default", &hsmmc1_default},
+	{"hs", &hsmmc1_default},
+	{NULL}
+};
+
+static struct pinctrl_desc pinctrl_descs_hsmmc2_rev20[] = {
+	{"default", &hsmmc2_default_hs},
+	{"hs", &hsmmc2_default_hs},
+	{"ddr_1_8v", &hsmmc2_ddr_1v8_rev20},
+	{"hs200_1_8v", &hsmmc2_hs200_1v8_rev20},
+	{NULL}
+};
+
+static struct pinctrl_desc pinctrl_descs_hsmmc2_rev11[] = {
+	{"default", &hsmmc2_default_hs},
+	{"hs", &hsmmc2_default_hs},
+	{"ddr_1_8v", &hsmmc2_ddr_1v8_rev11},
+	{"hs200_1_8v", &hsmmc2_hs200_1v8_rev11},
+	{NULL}
+};
+
+static struct pinctrl_desc pinctrl_descs_hsmmc2_dra72x[] = {
+	{"default", &hsmmc2_default_hs},
+	{"hs", &hsmmc2_default_hs},
+	{"ddr_1_8v", &hsmmc2_ddr_1v8_dra72},
+	{"hs200_1_8v", &hsmmc2_hs200_1v8_dra72},
+	{NULL}
+};
+
+struct omap_hsmmc_pinctrl_state *platform_fixup_get_pinctrl_by_mode
+				  (struct hsmmc *base, const char *mode)
+{
+	struct pinctrl_desc *p = NULL;
+
+	switch ((u32)&base->res1) {
+	case OMAP_HSMMC1_BASE:
+		p = pinctrl_descs_hsmmc1;
+		break;
+	case OMAP_HSMMC2_BASE:
+		if ((omap_revision() == DRA752_ES1_0) ||
+		    (omap_revision() == DRA752_ES1_1))
+			p = pinctrl_descs_hsmmc2_rev11;
+		else if (is_dra72x())
+			p = pinctrl_descs_hsmmc2_dra72x;
+		else if (is_dra7xx())
+			p = pinctrl_descs_hsmmc2_rev20;
+		break;
+	default:
+		break;
+	}
+
+	if (!p) {
+		printf("%s no pinctrl defined for MMC@%p\n", __func__,
+		       base);
+		return NULL;
+	}
+	while (p->name) {
+		if (strcmp(mode, p->name) == 0)
+			return p->pinctrl;
+		p++;
+	}
+	return NULL;
+}
+#endif
+
 int platform_fixup_disable_uhs_mode(void)
 {
 	return omap_revision() == DRA752_ES1_1;

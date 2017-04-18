@@ -828,4 +828,264 @@ const struct iodelay_cfg_entry dra742_es2_0_iodelay_cfg_array[] = {
 };
 #endif
 
+
+#if defined(CONFIG_IODELAY_RECALIBRATION) && defined(CONFIG_SPL_BUILD) && \
+    defined(CONFIG_OMAP_HSMMC)
+
+static struct pad_conf_entry hsmmc1_default_padconf[] = {
+	{MMC1_CLK,  (M0 | PIN_INPUT_PULLUP) /* mmc1_clk.clk */},
+	{MMC1_CMD,  (M0 | PIN_INPUT_PULLUP) /* mmc1_cmd.cmd */},
+	{MMC1_DAT0, (M0 | PIN_INPUT_PULLUP) /* mmc1_dat0.dat0 */},
+	{MMC1_DAT1, (M0 | PIN_INPUT_PULLUP) /* mmc1_dat1.dat1 */},
+	{MMC1_DAT2, (M0 | PIN_INPUT_PULLUP) /* mmc1_dat2.dat2 */},
+	{MMC1_DAT3, (M0 | PIN_INPUT_PULLUP) /* mmc1_dat3.dat3 */},
+};
+
+static struct pad_conf_entry mmc2_pins_default_hs[] = {
+	{GPMC_A23, (M1 | PIN_INPUT_PULLUP) /* g pmc_a23.mmc2_clk */},
+	{GPMC_CS1, (M1 | PIN_INPUT_PULLUP) /* gpmc_cs1.mmc2_cmd */},
+	{GPMC_A24, (M1 | PIN_INPUT_PULLUP) /* gpmc_a24.mmc2_dat0 */},
+	{GPMC_A25, (M1 | PIN_INPUT_PULLUP) /* gpmc_a25.mmc2_dat1 */},
+	{GPMC_A26, (M1 | PIN_INPUT_PULLUP) /* gpmc_a26.mmc2_dat2 */},
+	{GPMC_A27, (M1 | PIN_INPUT_PULLUP) /* gpmc_a27.mmc2_dat3 */},
+	{GPMC_A19, (M1 | PIN_INPUT_PULLUP) /* gpmc_a19.mmc2_dat4 */},
+	{GPMC_A20, (M1 | PIN_INPUT_PULLUP) /* gpmc_a20.mmc2_dat5 */},
+	{GPMC_A21, (M1 | PIN_INPUT_PULLUP) /* gpmc_a21.mmc2_dat6 */},
+	{GPMC_A22, (M1 | PIN_INPUT_PULLUP) /* gpmc_a22.mmc2_dat7 */},
+};
+
+static struct pad_conf_entry mmc2_pins_ddr_hs200_1_8v[] = {
+	{GPMC_A23, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a23.mmc2_clk */},
+	{GPMC_CS1, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_cs1.mmc2_cmd */},
+	{GPMC_A24, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a24.mmc2_dat0 */},
+	{GPMC_A25, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a25.mmc2_dat1 */},
+	{GPMC_A26, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a26.mmc2_dat2 */},
+	{GPMC_A27, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a27.mmc2_dat3 */},
+	{GPMC_A19, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a19.mmc2_dat4 */},
+	{GPMC_A20, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a20.mmc2_dat5 */},
+	{GPMC_A21, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a21.mmc2_dat6 */},
+	{GPMC_A22, (M1 | PIN_INPUT_PULLUP | MANUAL_MODE) /* gpmc_a22.mmc2_dat7 */},
+};
+
+static struct iodelay_cfg_entry mmc2_iodelay_hs200_1_8v_rev11_conf[] = {
+	{0x190, 621, 600	/* CFG_GPMC_A19_OEN */},
+	{0x194, 300, 0		/* CFG_GPMC_A19_OUT */},
+	{0x1a8, 739, 600	/* CFG_GPMC_A20_OEN */},
+	{0x1ac, 240, 0		/* CFG_GPMC_A20_OUT */},
+	{0x1b4, 812, 600	/* CFG_GPMC_A21_OEN */},
+	{0x1b8, 240, 0		/* CFG_GPMC_A21_OUT */},
+	{0x1c0, 954, 600	/* CFG_GPMC_A22_OEN */},
+	{0x1c4, 60, 0		/* CFG_GPMC_A22_OUT */},
+	{0x1d0, 1340, 420	/* CFG_GPMC_A23_OUT */},
+	{0x1d8, 935, 600	/* CFG_GPMC_A24_OEN */},
+	{0x1dc, 0, 0		/* CFG_GPMC_A24_OUT */},
+	{0x1e4, 525, 600	/* CFG_GPMC_A25_OEN */},
+	{0x1e8, 120, 0		/* CFG_GPMC_A25_OUT */},
+	{0x1f0, 767, 600	/* CFG_GPMC_A26_OEN */},
+	{0x1f4, 225, 0		/* CFG_GPMC_A26_OUT */},
+	{0x1fc, 565, 600	/* CFG_GPMC_A27_OEN */},
+	{0x200, 60, 0		/* CFG_GPMC_A27_OUT */},
+	{0x364, 969, 600	/* CFG_GPMC_CS1_OEN */},
+	{0x368, 180, 0		/* CFG_GPMC_CS1_OUT */},
+};
+
+static struct iodelay_cfg_entry mmc2_iodelay_hs200_1_8v_rev20_conf[] = {
+	{0x190, 274, 0  /* CFG_GPMC_A19_OEN */},
+	{0x194, 162, 0  /* CFG_GPMC_A19_OUT */},
+	{0x1a8, 401, 0  /* CFG_GPMC_A20_OEN */},
+	{0x1ac, 73, 0   /* CFG_GPMC_A20_OUT */},
+	{0x1b4, 465, 0  /* CFG_GPMC_A21_OEN */},
+	{0x1b8, 115, 0  /* CFG_GPMC_A21_OUT */},
+	{0x1c0, 633, 0  /* CFG_GPMC_A22_OEN */},
+	{0x1c4, 47, 0   /* CFG_GPMC_A22_OUT */},
+	{0x1d0, 935, 280 /* CFG_GPMC_A23_OUT */},
+	{0x1d8, 621, 0  /* CFG_GPMC_A24_OEN */},
+	{0x1dc, 0, 0    /* CFG_GPMC_A24_OUT */},
+	{0x1e4, 183, 0  /* CFG_GPMC_A25_OEN */},
+	{0x1e8, 0, 0    /* CFG_GPMC_A25_OUT */},
+	{0x1f0, 467, 0  /* CFG_GPMC_A26_OEN */},
+	{0x1f4, 0, 0    /* CFG_GPMC_A26_OUT */},
+	{0x1fc, 262, 0  /* CFG_GPMC_A27_OEN */},
+	{0x200, 46, 0   /* CFG_GPMC_A27_OUT */},
+	{0x364, 684, 0  /* CFG_GPMC_CS1_OEN */},
+	{0x368, 76, 0   /* CFG_GPMC_CS1_OUT */},
+};
+
+static struct iodelay_cfg_entry mmc2_iodelay_ddr_1_8v_rev11_conf[] = {
+	{0x18c, 0, 0		/* CFG_GPMC_A19_IN */},
+	{0x1a4, 274, 240	/* CFG_GPMC_A20_IN */},
+	{0x1b0, 0, 60		/* CFG_GPMC_A21_IN */},
+	{0x1bc, 0, 60		/* CFG_GPMC_A22_IN */},
+	{0x1c8, 514, 360	/* CFG_GPMC_A23_IN */},
+	{0x1d4, 187, 120	/* CFG_GPMC_A24_IN */},
+	{0x1e0, 0, 0		/* CFG_GPMC_A25_IN */},
+	{0x1ec, 0, 60		/* CFG_GPMC_A26_IN */},
+	{0x1f8, 121, 60		/* CFG_GPMC_A27_IN */},
+	{0x360, 0, 0		/* CFG_GPMC_CS1_IN */},
+	{0x190, 0, 0		/* CFG_GPMC_A19_OEN */},
+	{0x194, 174, 0		/* CFG_GPMC_A19_OUT */},
+	{0x1a8, 0, 0		/* CFG_GPMC_A20_OEN */},
+	{0x1ac, 168, 0		/* CFG_GPMC_A20_OUT */},
+	{0x1b4, 0, 0		/* CFG_GPMC_A21_OEN */},
+	{0x1b8, 136, 0		/* CFG_GPMC_A21_OUT */},
+	{0x1c0, 0, 0		/* CFG_GPMC_A22_OEN */},
+	{0x1c4, 0, 0		/* CFG_GPMC_A22_OUT */},
+	{0x1d0, 879, 0		/* CFG_GPMC_A23_OUT */},
+	{0x1d8, 0, 0		/* CFG_GPMC_A24_OEN */},
+	{0x1dc, 0, 0		/* CFG_GPMC_A24_OUT */},
+	{0x1e4, 0, 0		/* CFG_GPMC_A25_OEN */},
+	{0x1e8, 34, 0		/* CFG_GPMC_A25_OUT */},
+	{0x1f0, 0, 0		/* CFG_GPMC_A26_OEN */},
+	{0x1f4, 120, 0		/* CFG_GPMC_A26_OUT */},
+	{0x1fc, 0, 0		/* CFG_GPMC_A27_OEN */},
+	{0x200, 0, 0		/* CFG_GPMC_A27_OUT */},
+	{0x364, 0, 0		/* CFG_GPMC_CS1_OEN */},
+	{0x368, 11, 0		/* CFG_GPMC_CS1_OUT */},
+};
+
+static struct iodelay_cfg_entry mmc2_iodelay_ddr_1_8v_rev20_conf[] = {
+	{0x18c, 270, 0	/* CFG_GPMC_A19_IN */},
+	{0x1a4, 0, 0	/* CFG_GPMC_A20_IN */},
+	{0x1b0, 170, 0	/* CFG_GPMC_A21_IN */},
+	{0x1bc, 758, 0	/* CFG_GPMC_A22_IN */},
+	{0x1c8, 0, 0	/* CFG_GPMC_A23_IN */},
+	{0x1d4, 81, 0	/* CFG_GPMC_A24_IN */},
+	{0x1e0, 286, 0	/* CFG_GPMC_A25_IN */},
+	{0x1ec, 0, 0	/* CFG_GPMC_A26_IN */},
+	{0x1f8, 123, 0	/* CFG_GPMC_A27_IN */},
+	{0x360, 346, 0	/* CFG_GPMC_CS1_IN */},
+	{0x190, 0, 0	/* CFG_GPMC_A19_OEN */},
+	{0x194, 55, 0	/* CFG_GPMC_A19_OUT */},
+	{0x1a8, 0, 0	/* CFG_GPMC_A20_OEN */},
+	{0x1ac, 422, 0	/* CFG_GPMC_A20_OUT */},
+	{0x1b4, 642, 0	/* CFG_GPMC_A21_OEN */},
+	{0x1b8, 0, 0	/* CFG_GPMC_A21_OUT */},
+	{0x1c0, 0, 0	/* CFG_GPMC_A22_OEN */},
+	{0x1c4, 128, 0	/* CFG_GPMC_A22_OUT */},
+	{0x1d0, 0, 0	/* CFG_GPMC_A23_OUT */},
+	{0x1d8, 0, 0	/* CFG_GPMC_A24_OEN */},
+	{0x1dc, 395, 0	/* CFG_GPMC_A24_OUT */},
+	{0x1e4, 0, 0	/* CFG_GPMC_A25_OEN */},
+	{0x1e8, 0, 0	/* CFG_GPMC_A25_OUT */},
+	{0x1f0, 623, 0	/* CFG_GPMC_A26_OEN */},
+	{0x1f4, 0, 0	/* CFG_GPMC_A26_OUT */},
+	{0x1fc, 54, 0	/* CFG_GPMC_A27_OEN */},
+	{0x200, 0, 0	/* CFG_GPMC_A27_OUT */},
+	{0x364, 0, 0	/* CFG_GPMC_CS1_OEN */},
+	{0x368, 0, 0	/* CFG_GPMC_CS1_OUT */},
+};
+
+static struct iodelay_cfg_entry mmc2_iodelay_ddr_1_8v_dra72_conf[] = {
+	{0x18c, 0, 0,	/* CFG_GPMC_A19_IN */},
+	{0x1a4, 121, 0,	/* CFG_GPMC_A20_IN */},
+	{0x1b0, 0, 0,	/* CFG_GPMC_A21_IN */},
+	{0x1bc, 20, 0,	/* CFG_GPMC_A22_IN */},
+	{0x1c8, 108, 0,	/* CFG_GPMC_A23_IN */},
+	{0x1d4, 31, 0,	/* CFG_GPMC_A24_IN */},
+	{0x1e0, 0, 0,	/* CFG_GPMC_A25_IN */},
+	{0x1ec, 24, 0,	/* CFG_GPMC_A26_IN */},
+	{0x1f8, 0, 0,	/* CFG_GPMC_A27_IN */},
+	{0x360, 0, 0,	/* CFG_GPMC_CS1_IN */},
+	{0x194, 152, 0,	/* CFG_GPMC_A19_OUT */},
+	{0x1ac, 206, 0,	/* CFG_GPMC_A20_OUT */},
+	{0x1b8, 78, 0,	/* CFG_GPMC_A21_OUT */},
+	{0x1c4, 2, 0,	/* CFG_GPMC_A22_OUT */},
+	{0x1d0, 266, 0,	/* CFG_GPMC_A23_OUT */},
+	{0x1dc, 0, 0,	/* CFG_GPMC_A24_OUT */},
+	{0x1e8, 0, 0,	/* CFG_GPMC_A25_OUT */},
+	{0x1f4, 43, 0,	/* CFG_GPMC_A26_OUT */},
+	{0x200, 0, 0,	/* CFG_GPMC_A27_OUT */},
+	{0x368, 0, 0,	/* CFG_GPMC_CS1_OUT */},
+	{0x190, 0, 0,	/* CFG_GPMC_A19_OEN */},
+	{0x1a8, 0, 0,	/* CFG_GPMC_A20_OEN */},
+	{0x1b4, 0, 0,	/* CFG_GPMC_A21_OEN */},
+	{0x1c0, 0, 0,	/* CFG_GPMC_A22_OEN */},
+	{0x1d8, 0, 0,	/* CFG_GPMC_A24_OEN */},
+	{0x1e4, 0, 0,	/* CFG_GPMC_A25_OEN */},
+	{0x1f0, 0, 0,	/* CFG_GPMC_A26_OEN */},
+	{0x1fc, 0, 0,	/* CFG_GPMC_A27_OEN */},
+	{0x364, 0, 0,	/* CFG_GPMC_CS1_OEN */},
+};
+
+static struct iodelay_cfg_entry mmc2_iodelay_hs200_1_8v_dra72_conf[] = {
+	{0x194, 150 , 95	/* CFG_GPMC_A19_OUT */},
+	{0x1AC, 250 , 0		/* CFG_GPMC_A20_OUT */},
+	{0x1B8, 125 , 0		/* CFG_GPMC_A21_OUT */},
+	{0x1C4, 100 , 0		/* CFG_GPMC_A22_OUT */},
+	{0x1D0, 870 , 415	/* CFG_GPMC_A23_OUT */},
+	{0x1DC, 30  , 0		/* CFG_GPMC_A24_OUT */},
+	{0x1E8, 200 , 0		/* CFG_GPMC_A25_OUT */},
+	{0x1F4, 200 , 0		/* CFG_GPMC_A26_OUT */},
+	{0x200, 0   , 0		/* CFG_GPMC_A27_OUT */},
+	{0x368, 240 , 0		/* CFG_GPMC_CS1_OUT */},
+	{0x190, 695 , 0		/* CFG_GPMC_A19_OEN */},
+	{0x1A8, 924 , 0		/* CFG_GPMC_A20_OEN */},
+	{0x1B4, 719 , 0		/* CFG_GPMC_A21_OEN */},
+	{0x1C0, 824 , 0		/* CFG_GPMC_A22_OEN */},
+	{0x1D8, 877 , 0		/* CFG_GPMC_A24_OEN */},
+	{0x1E4, 446 , 0		/* CFG_GPMC_A25_OEN */},
+	{0x1F0, 847 , 0		/* CFG_GPMC_A26_OEN */},
+	{0x1FC, 586 , 0		/* CFG_GPMC_A27_OEN */},
+	{0x364, 1039 , 0	/* CFG_GPMC_CS1_OEN */},
+};
+
+#define dimof(t) (sizeof(t) / sizeof(t[0]))
+static struct omap_hsmmc_pinctrl_state hsmmc1_default = {
+	.padconf = hsmmc1_default_padconf,
+	.npads = dimof(hsmmc1_default_padconf),
+	.iodelay = NULL,
+	.niodelays = 0,
+};
+
+static struct omap_hsmmc_pinctrl_state hsmmc2_default_hs = {
+	.padconf = mmc2_pins_default_hs,
+	.npads = dimof(mmc2_pins_default_hs),
+	.iodelay = NULL,
+	.niodelays = 0,
+};
+
+static struct omap_hsmmc_pinctrl_state hsmmc2_ddr_1v8_rev11 = {
+	.padconf = mmc2_pins_ddr_hs200_1_8v,
+	.npads = dimof(mmc2_pins_ddr_hs200_1_8v),
+	.iodelay = mmc2_iodelay_ddr_1_8v_rev11_conf,
+	.niodelays = dimof(mmc2_iodelay_ddr_1_8v_rev11_conf),
+};
+
+static struct omap_hsmmc_pinctrl_state hsmmc2_ddr_1v8_rev20 = {
+	.padconf = mmc2_pins_ddr_hs200_1_8v,
+	.npads = dimof(mmc2_pins_ddr_hs200_1_8v),
+	.iodelay = mmc2_iodelay_ddr_1_8v_rev20_conf,
+	.niodelays = dimof(mmc2_iodelay_ddr_1_8v_rev20_conf),
+};
+
+static struct omap_hsmmc_pinctrl_state hsmmc2_hs200_1v8_rev11 = {
+	.padconf = mmc2_pins_ddr_hs200_1_8v,
+	.npads = dimof(mmc2_pins_ddr_hs200_1_8v),
+	.iodelay = mmc2_iodelay_hs200_1_8v_rev11_conf,
+	.niodelays = dimof(mmc2_iodelay_hs200_1_8v_rev11_conf),
+};
+
+static struct omap_hsmmc_pinctrl_state hsmmc2_hs200_1v8_rev20 = {
+	.padconf = mmc2_pins_ddr_hs200_1_8v,
+	.npads = dimof(mmc2_pins_ddr_hs200_1_8v),
+	.iodelay = mmc2_iodelay_hs200_1_8v_rev20_conf,
+	.niodelays = dimof(mmc2_iodelay_hs200_1_8v_rev20_conf),
+};
+
+
+static struct omap_hsmmc_pinctrl_state hsmmc2_ddr_1v8_dra72 = {
+	.padconf = mmc2_pins_ddr_hs200_1_8v,
+	.npads = dimof(mmc2_pins_ddr_hs200_1_8v),
+	.iodelay = mmc2_iodelay_ddr_1_8v_dra72_conf,
+	.niodelays = dimof(mmc2_iodelay_ddr_1_8v_dra72_conf),
+};
+
+static struct omap_hsmmc_pinctrl_state hsmmc2_hs200_1v8_dra72 = {
+	.padconf = mmc2_pins_ddr_hs200_1_8v,
+	.npads = dimof(mmc2_pins_ddr_hs200_1_8v),
+	.iodelay = mmc2_iodelay_hs200_1_8v_dra72_conf,
+	.niodelays = dimof(mmc2_iodelay_hs200_1_8v_dra72_conf),
+};
+#endif
+
 #endif /* _MUX_DATA_DRA7XX_H_ */
