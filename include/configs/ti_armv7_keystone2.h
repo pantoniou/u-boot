@@ -248,7 +248,11 @@
 	"addr_secdb_key=0xc000000\0"					\
 	"name_kern=zImage\0"						\
 	"addr_mon=0x87000000\0"						\
+	"addr_non_sec_mon=0x0c087fc0\0"					\
+	"addr_load_sec_bm=0x0c08c000\0"					\
 	"run_mon=mon_install ${addr_mon}\0"				\
+	"run_mon_hs=mon_install ${addr_non_sec_mon} "			\
+			"${addr_load_sec_bm}\0"				\
 	"run_kern=bootz ${loadaddr} ${rd_spec} ${fdtaddr}\0"		\
 	"init_net=run args_all args_net\0"				\
 	"init_nfs=setenv autoload no; dhcp; run args_all args_net\0"	\
@@ -306,9 +310,8 @@
 	"get_fdt_${boot} get_kern_${boot} run_kern"
 #else
 #define CONFIG_BOOTCOMMAND						\
-	"run sec_bm_copy; mon_install ${addr_non_sec_bm_mkimg};"	\
-	"run init_${boot} init_fw_rd_${boot} get_fit_${boot};"		\
-	"bootm ${fit_loadaddr}#${name_fdt}"
+	"run run_mon_hs init_${boot} init_fw_rd_${boot} "		\
+	"get_fit_${boot}; bootm ${fit_loadaddr}#${name_fdt}"
 #endif
 #endif
 
