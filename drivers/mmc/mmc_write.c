@@ -198,6 +198,7 @@ ulong mmc_bwrite(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 	int dev_num = block_dev->devnum;
 	lbaint_t cur, blocks_todo = blkcnt;
 	int err;
+	uint start_time;
 
 	struct mmc *mmc = find_mmc_device(dev_num);
 	if (!mmc)
@@ -210,15 +211,21 @@ ulong mmc_bwrite(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 	if (mmc_set_blocklen(mmc, mmc->write_bl_len))
 		return 0;
 
+	start_time =  get_timer(0);
 	do {
+		mmc->wr_stats.transfers++;
 		cur = (blocks_todo > mmc->cfg->b_max) ?
 			mmc->cfg->b_max : blocks_todo;
-		if (mmc_write_blocks(mmc, start, cur, src) != cur)
+		if (mmc_write_blocks(mmc, start, cur, src) != cur) {
+			mmc->wr_stats.errors++;
 			return 0;
+		}
 		blocks_todo -= cur;
 		start += cur;
 		src += cur * mmc->write_bl_len;
 	} while (blocks_todo > 0);
 
+	mmc->wr_stats.total_time += get_timer(start_time);
+	mmc->wr_stats.total_sz += blkcnt;
 	return blkcnt;
 }

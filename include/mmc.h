@@ -383,6 +383,13 @@ struct mmc_data {
 	uint blocksize;
 };
 
+struct mmc_statistics {
+	uint transfers;
+	uint errors;
+	uint total_sz;
+	uint total_time;
+};
+
 /* forward decl. */
 struct mmc;
 
@@ -550,6 +557,8 @@ struct mmc {
 #endif
 	unsigned int sd_bus_speed;
 	unsigned int sd3_bus_mode;
+	struct mmc_statistics rd_stats;
+	struct mmc_statistics wr_stats;
 };
 
 struct mmc_hwpart_conf {

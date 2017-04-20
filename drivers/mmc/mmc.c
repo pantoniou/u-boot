@@ -362,6 +362,7 @@ ulong mmc_bread(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 	int dev_num = block_dev->devnum;
 	int err;
 	lbaint_t cur, blocks_todo = blkcnt;
+	uint start_time;
 
 	if (blkcnt == 0)
 		return 0;
@@ -391,10 +392,13 @@ ulong mmc_bread(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 		return 0;
 	}
 
+	start_time =  get_timer(0);
 	do {
+		mmc->rd_stats.transfers++;
 		cur = (blocks_todo > mmc->cfg->b_max) ?
 			mmc->cfg->b_max : blocks_todo;
 		if (mmc_read_blocks(mmc, dst, start, cur) != cur) {
+			mmc->rd_stats.errors++;
 			debug("%s: Failed to read blocks\n", __func__);
 			return 0;
 		}
@@ -403,6 +407,8 @@ ulong mmc_bread(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 		dst += cur * mmc->read_bl_len;
 	} while (blocks_todo > 0);
 
+	mmc->rd_stats.total_time += get_timer(start_time);
+	mmc->rd_stats.total_sz += blkcnt;
 	return blkcnt;
 }
 
