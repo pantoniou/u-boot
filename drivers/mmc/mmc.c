@@ -429,7 +429,7 @@ static int mmc_go_idle(struct mmc *mmc)
 
 static int mmc_host_uhs(struct mmc *mmc)
 {
-	return mmc->cfg->host_caps &
+	return mmc->host_ok_caps &
 	(MMC_MODE_UHS_SDR12 | MMC_MODE_UHS_SDR25 |
 	MMC_MODE_UHS_SDR50 | MMC_MODE_UHS_SDR104 |
 	MMC_MODE_UHS_DDR50);
@@ -715,7 +715,7 @@ int mmc_switch(struct mmc *mmc, u8 set, u8 index, u8 value)
 
 static void mmc_select_card_type(struct mmc *mmc, char card_type)
 {
-	u32 caps = mmc->cfg->host_caps;
+	u32 caps = mmc->host_ok_caps;
 	uint hs_max_dtr = mmc->tran_speed;
 
 	if (caps & MMC_MODE_HS &&
@@ -1120,7 +1120,7 @@ static int mmc_app_set_bus_width(struct mmc *mmc, int width)
 
 static void sd_update_bus_speed_mode(struct mmc *mmc)
 {
-	u32 caps = mmc->cfg->host_caps;
+	u32 caps = mmc->host_ok_caps;
 	/*
 	 * If the host doesn't support any of the UHS-I modes, fallback on
 	 * default speed.
@@ -1264,8 +1264,8 @@ static int mmc_sd_switch_hs(struct mmc *mmc)
 	 * This can avoid furthur problem when the card runs in different
 	 * mode between the host.
 	 */
-	if (!((mmc->cfg->host_caps & MMC_MODE_HS_52MHz) &&
-	      (mmc->cfg->host_caps & MMC_MODE_HS)))
+	if (!((mmc->host_ok_caps & MMC_MODE_HS_52MHz) &&
+	      (mmc->host_ok_caps & MMC_MODE_HS)))
 		return -EINVAL;
 
 	if (!(mmc->card_caps & MMC_MODE_HS))
@@ -1376,7 +1376,7 @@ retry_scr:
 		mmc->card_caps |= MMC_MODE_HS;
 
 	/* Restrict card's capabilities by what the host can do */
-	mmc->card_caps &= mmc->cfg->host_caps;
+	mmc->card_caps &= mmc->host_ok_caps;
 
 	if (mmc->ocr & OCR_S18R) {
 		mmc_sd_init_uhs_card(mmc);
@@ -1597,16 +1597,15 @@ static int mmc_select_bus_width(struct mmc *mmc)
 		MMC_BUS_WIDTH_8,
 		MMC_BUS_WIDTH_4,
 	};
-	const struct mmc_config *cfg = mmc->cfg;
 	ALLOC_CACHE_ALIGN_BUFFER(u8, ext_csd, MMC_MAX_BLOCK_LEN);
 	ALLOC_CACHE_ALIGN_BUFFER(u8, test_csd, MMC_MAX_BLOCK_LEN);
 	unsigned idx = 0, bus_width = 0;
 	int err = 0;
 
-	if (!(cfg->host_caps & (MMC_MODE_8BIT | MMC_MODE_4BIT)))
+	if (!(mmc->host_ok_caps & (MMC_MODE_8BIT | MMC_MODE_4BIT)))
 		return 0;
 
-	idx = (cfg->host_caps & MMC_MODE_8BIT) ? 0 : 1;
+	idx = (mmc->host_ok_caps & MMC_MODE_8BIT) ? 0 : 1;
 
 	err = mmc_send_ext_csd(mmc, ext_csd);
 	if (err)
@@ -1979,17 +1978,23 @@ static int mmc_startup(struct mmc *mmc)
 		mmc_set_clock(mmc, mmc->tran_speed, false);
 		if (mmc->timing == MMC_TIMING_MMC_HS200) {
 			err = mmc_execute_tuning(mmc,
-						 MMC_SEND_TUNING_BLOCK_HS200);
-			if (err)
-				return err;
+						MMC_SEND_TUNING_BLOCK_HS200);
+			if (err) {
+				printf("Tuning failed, dropping HS200 mode.\n");
+				mmc->host_ok_caps &= ~MMC_MODE_HS200;
+				return -EAGAIN;
+			}
 		} else if (mmc->timing == MMC_TIMING_MMC_HS) {
 			err = mmc_select_bus_width(mmc);
 			if (err)
 				return err;
 
 			err = mmc_select_hs_ddr(mmc);
-			if (err)
-				return err;
+			if (err) {
+				printf("dropping DDR52 mode.\n");
+				mmc->host_ok_caps &= ~MMC_MODE_DDR_52MHz;
+				return -EAGAIN;
+			}
 		}
 	}
 
@@ -2224,6 +2229,7 @@ static int mmc_complete_init(struct mmc *mmc)
 int mmc_init(struct mmc *mmc)
 {
 	int err = 0;
+	int retries = 0;
 	__maybe_unused unsigned start;
 #ifdef CONFIG_DM_MMC
 	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(mmc->dev);
@@ -2233,16 +2239,20 @@ int mmc_init(struct mmc *mmc)
 	if (mmc->has_init)
 		return 0;
 
+	mmc->host_ok_caps = mmc->cfg->host_caps;
 	start = get_timer(0);
 
-	if (!mmc->init_in_progress)
-		err = mmc_start_init(mmc);
+	do {
+		retries++;
+		if (!mmc->init_in_progress)
+			err = mmc_start_init(mmc);
 
-	if (!err)
-		err = mmc_complete_init(mmc);
-	if (err)
-		printf("%s: %d, time %lu\n", __func__, err, get_timer(start));
+		if (!err)
+			err = mmc_complete_init(mmc);
+	} while (err == -EAGAIN);
 
+	debug("%s: %d, time %lu (retries %d)\n", __func__, err,
+	      get_timer(start), retries - 1);
 	return err;
 }
 

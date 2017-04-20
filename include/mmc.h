@@ -542,6 +542,7 @@ struct mmc {
 #endif
 	char op_cond_pending;	/* 1 if we are waiting on an op_cond command */
 	char init_in_progress;	/* 1 if we have done mmc_start_init() */
+	uint host_ok_caps;	/* host caps that are not yet proven wrong */
 	char preinit;		/* start init as early as possible */
 	int ddr_mode;
 #ifdef CONFIG_DM_MMC
