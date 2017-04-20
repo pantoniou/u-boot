@@ -1158,15 +1158,19 @@ static int omap_hsmmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 		} while (1);
 
 		omap_hsmmc_dma_cleanup(mmc);
+
+		if ((mmc_stat & ERRI_MASK) != 0)
+			return 1;
+
 		return 0;
 	}
 #endif
 
 	if (data && (data->flags & MMC_DATA_READ)) {
-		mmc_read_data(mmc_base,	data->dest,
+		return mmc_read_data(mmc_base,	data->dest,
 				data->blocksize * data->blocks);
 	} else if (data && (data->flags & MMC_DATA_WRITE)) {
-		mmc_write_data(mmc_base, data->src,
+		return mmc_write_data(mmc_base, data->src,
 				data->blocksize * data->blocks);
 	}
 	return 0;
