@@ -12,6 +12,8 @@
 
 #include <mmc.h>
 
+bool mmc_check_error_rate(struct mmc *mmc, struct mmc_statistics *stats);
+bool mmc_disable_current_mode(struct mmc *mmc);
 extern int mmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd,
 			struct mmc_data *data);
 extern int mmc_send_status(struct mmc *mmc, int timeout);

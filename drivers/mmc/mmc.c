@@ -22,6 +22,8 @@
 #include <div64.h>
 #include "mmc_private.h"
 
+#define MAX_ERROR_RATE	20
+
 static const unsigned int sd_au_size[] = {
 	0,		SZ_16K / 512,		SZ_32K / 512,
 	SZ_64K / 512,	SZ_128K / 512,		SZ_256K / 512,
@@ -29,6 +31,7 @@ static const unsigned int sd_au_size[] = {
 	SZ_4M / 512,	SZ_8M / 512,		(SZ_8M + SZ_4M) / 512,
 	SZ_16M / 512,	(SZ_16M + SZ_8M) / 512,	SZ_32M / 512,	SZ_64M / 512,
 };
+static int mmc_reinit(struct mmc *mmc);
 static int mmc_set_timing(struct mmc *mmc, uint timing);
 static int mmc_set_bus_width(struct mmc *mmc, uint width);
 static int mmc_select_bus_width(struct mmc *mmc);
@@ -349,6 +352,43 @@ static int mmc_read_blocks(struct mmc *mmc, void *dst, lbaint_t start,
 	return blkcnt;
 }
 
+bool mmc_check_error_rate(struct mmc *mmc, struct mmc_statistics *s)
+{
+	int percent = s->transfers ? ((s->errors * 100) / s->transfers) : 0;
+
+	if ((percent > MAX_ERROR_RATE) && (s->transfers > 10)) {
+		debug("error rate too high: %d%% (%d/%d)\n", percent,
+		      s->errors, s->transfers);
+		return true;
+	}
+	return false;
+}
+
+bool mmc_disable_current_mode(struct mmc *mmc)
+{
+	__maybe_unused const char *mode;
+	bool disabled = true;
+
+	switch (mmc->timing) {
+	case MMC_TIMING_MMC_HS200:
+		mode = "HS200";
+		mmc->host_ok_caps &= ~MMC_MODE_HS200;
+		break;
+	case MMC_TIMING_MMC_DDR52:
+		mode = "DDR52";
+		mmc->host_ok_caps &= ~MMC_MODE_DDR_52MHz;
+		break;
+	default:
+		disabled = false;
+	}
+	if (disabled) {
+		debug("%s mode is disabled. Reinitializing the MMC...\n", mode);
+		mmc->has_init = 0;
+		mmc_reinit(mmc);
+	}
+	return disabled;
+}
+
 #ifdef CONFIG_BLK
 ulong mmc_bread(struct udevice *dev, lbaint_t start, lbaint_t blkcnt, void *dst)
 #else
@@ -399,6 +439,15 @@ ulong mmc_bread(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 			mmc->cfg->b_max : blocks_todo;
 		if (mmc_read_blocks(mmc, dst, start, cur) != cur) {
 			mmc->rd_stats.errors++;
+			/*
+			 * An error occured. Maybe we should try a slower but
+			 * safer mode.
+			 */
+			if (mmc_check_error_rate(mmc, &mmc->rd_stats))
+				if (mmc_disable_current_mode(mmc))
+					return (blkcnt - blocks_todo) +
+						mmc_bread(block_dev, start,
+							  blocks_todo, dst);
 			debug("%s: Failed to read blocks\n", __func__);
 			return 0;
 		}
@@ -2232,7 +2281,7 @@ static int mmc_complete_init(struct mmc *mmc)
 	return err;
 }
 
-int mmc_init(struct mmc *mmc)
+static int mmc_reinit(struct mmc *mmc)
 {
 	int err = 0;
 	int retries = 0;
@@ -2242,10 +2291,9 @@ int mmc_init(struct mmc *mmc)
 
 	upriv->mmc = mmc;
 #endif
-	if (mmc->has_init)
-		return 0;
 
-	mmc->host_ok_caps = mmc->cfg->host_caps;
+	memset(&mmc->rd_stats, 0, sizeof(struct mmc_statistics));
+	memset(&mmc->wr_stats, 0, sizeof(struct mmc_statistics));
 	start = get_timer(0);
 
 	do {
@@ -2260,6 +2308,14 @@ int mmc_init(struct mmc *mmc)
 	debug("%s: %d, time %lu (retries %d)\n", __func__, err,
 	      get_timer(start), retries - 1);
 	return err;
+}
+
+int mmc_init(struct mmc *mmc)
+{
+	if (mmc->has_init)
+		return 0;
+	mmc->host_ok_caps = mmc->cfg->host_caps;
+	return mmc_reinit(mmc);
 }
 
 int mmc_set_dsr(struct mmc *mmc, u16 val)
