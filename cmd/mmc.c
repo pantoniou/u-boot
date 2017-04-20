@@ -12,6 +12,42 @@
 
 static int curr_device = -1;
 
+
+static char *sprintf_speed(char *buf, ulong sz, uint ms)
+{
+	uint64_t kbytes_per_sec = ((sz >> 10) * 1000) / ms;
+	uint64_t mb_per_sec = kbytes_per_sec >> 10;
+	uint32_t remain = ((kbytes_per_sec - (mb_per_sec << 10)) * 100) >> 10;
+	if (ms && mb_per_sec)
+		sprintf(buf, "%llu.%02u MB/s", mb_per_sec, remain);
+	else if (ms && kbytes_per_sec)
+		sprintf(buf, "%llu KB/s", kbytes_per_sec);
+	else
+		strcpy(buf, "### MB/s");
+	return buf;
+}
+
+static void show_stats(struct mmc *mmc)
+{
+	char buf[50];
+	struct mmc_statistics *s;
+	s = &mmc->rd_stats;
+
+	printf("read %s. error %d/%d (%d%%)\n",
+	       sprintf_speed(buf,
+			     s->total_sz *  mmc->read_bl_len,
+			     s->total_time),
+		s->errors, s->transfers,
+		s->transfers ? (100 * s->errors / s->transfers) : 0);
+	s = &mmc->wr_stats;
+	printf("write %s. error %d/%d (%d%%)\n",
+	       sprintf_speed(buf,
+			     s->total_sz *  mmc->read_bl_len,
+			     s->total_time),
+		s->errors, s->transfers,
+		s->transfers ? (100 * s->errors / s->transfers) : 0);
+}
+
 static void print_mmcinfo(struct mmc *mmc)
 {
 	int i;
@@ -81,6 +117,7 @@ static void print_mmcinfo(struct mmc *mmc)
 			}
 		}
 	}
+	show_stats(mmc);
 }
 static struct mmc *init_mmc_device(int dev, bool force_init)
 {
