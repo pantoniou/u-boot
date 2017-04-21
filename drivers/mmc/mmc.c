@@ -446,7 +446,11 @@ ulong mmc_bread(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 			if (mmc_check_error_rate(mmc, &mmc->rd_stats))
 				if (mmc_disable_current_mode(mmc))
 					return (blkcnt - blocks_todo) +
+#ifdef CONFIG_BLK
+						mmc_bread(dev, start,
+#else
 						mmc_bread(block_dev, start,
+#endif
 							  blocks_todo, dst);
 			debug("%s: Failed to read blocks\n", __func__);
 			return 0;

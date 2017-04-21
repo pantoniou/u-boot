@@ -225,7 +225,11 @@ ulong mmc_bwrite(struct blk_desc *block_dev, lbaint_t start, lbaint_t blkcnt,
 			if (mmc_check_error_rate(mmc, &mmc->wr_stats))
 				if (mmc_disable_current_mode(mmc))
 					return (blkcnt - blocks_todo) +
+#ifdef CONFIG_BLK
+						mmc_bwrite(dev, start,
+#else
 						mmc_bwrite(block_dev, start,
+#endif
 							   blocks_todo, src);
 			debug("%s: Failed to write blocks\n", __func__);
 			return 0;
