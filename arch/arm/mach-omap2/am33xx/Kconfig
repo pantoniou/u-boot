@@ -34,6 +34,8 @@ config TARGET_AM335X_EVM
 	imply SPL_DM
 	imply SPL_DM_SEQ_ALIAS
 	imply SPL_OF_LIBFDT
+	select SPL_SYS_MALLOC_SIMPLE if SPL
+	select SPL_SEPARATE_BSS if SPL
 	help
 	  This option specifies support for the AM335x
 	  GP and HS EVM development platforms. The AM335x
