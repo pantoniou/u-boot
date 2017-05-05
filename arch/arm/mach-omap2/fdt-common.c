@@ -45,14 +45,39 @@ int ft_hs_disable_rng(void *fdt, bd_t *bd)
 }
 
 #if (CONFIG_TI_SECURE_EMIF_TOTAL_REGION_SIZE != 0)
+/*
+ * fdt_pack_reg - pack address and size array into the "reg"-suitable stream
+ */
+static int fdt_pack_reg(const void *fdt, void *buf, u64 address, u64 size)
+{
+	int address_cells = fdt_address_cells(fdt, 0);
+	int size_cells = fdt_size_cells(fdt, 0);
+	char *p = buf;
+
+	if (address_cells == 2)
+		*(fdt64_t *)p = cpu_to_fdt64(address);
+	else
+		*(fdt32_t *)p = cpu_to_fdt32(address);
+	p += 4 * address_cells;
+
+	if (size_cells == 2)
+		*(fdt64_t *)p = cpu_to_fdt64(size);
+	else
+		*(fdt32_t *)p = cpu_to_fdt32(size);
+	p += 4 * size_cells;
+
+	return p - (char *)buf;
+}
+
 int ft_hs_fixup_dram(void *fdt, bd_t *bd)
 {
 	const char *path, *subpath;
-	int offs;
+	int offs, len;
 	u32 sec_mem_start = get_sec_mem_start();
 	u32 sec_mem_size = CONFIG_TI_SECURE_EMIF_TOTAL_REGION_SIZE;
-	fdt64_t temp[2];
-	fdt32_t cells;
+	fdt32_t address_cells = cpu_to_fdt32(fdt_address_cells(fdt, 0));
+	fdt32_t size_cells = cpu_to_fdt32(fdt_size_cells(fdt, 0));
+	u8 temp[16]; /* Up to 64-bit address + 64-bit size */
 
 	/* Delete any original secure_reserved node */
 	path = "/reserved-memory/secure_reserved";
@@ -75,13 +100,9 @@ int ft_hs_fixup_dram(void *fdt, bd_t *bd)
 		}
 		path = "/reserved-memory";
 		offs = fdt_path_offset(fdt, path);
-#ifdef CONFIG_ARMV7_LPAE
-		cells = cpu_to_fdt32(2);
-#else
-		cells = cpu_to_fdt32(1);
-#endif
-		fdt_setprop(fdt, offs, "#address-cells", &cells, sizeof(cells));
-		fdt_setprop(fdt, offs, "#size-cells", &cells, sizeof(cells));
+
+		fdt_setprop(fdt, offs, "#address-cells", &address_cells, sizeof(address_cells));
+		fdt_setprop(fdt, offs, "#size-cells", &size_cells, sizeof(size_cells));
 		fdt_setprop(fdt, offs, "ranges", NULL, 0);
 	}
 
@@ -92,13 +113,12 @@ int ft_hs_fixup_dram(void *fdt, bd_t *bd)
 		return 1;
 	}
 
-	temp[0] = cpu_to_fdt64(((u64)sec_mem_start));
-	temp[1] = cpu_to_fdt64(((u64)sec_mem_size));
 	fdt_setprop_string(fdt, offs, "compatible",
 			   "ti,dra7-secure-memory");
 	fdt_setprop_string(fdt, offs, "status", "okay");
 	fdt_setprop(fdt, offs, "no-map", NULL, 0);
-	fdt_setprop(fdt, offs, "reg", temp, sizeof(temp));
+	len = fdt_pack_reg(fdt, temp, sec_mem_start, sec_mem_size);
+	fdt_setprop(fdt, offs, "reg", temp, len);
 
 	return 0;
 }
