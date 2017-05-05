@@ -113,8 +113,7 @@ int ft_hs_fixup_dram(void *fdt, bd_t *bd)
 		return 1;
 	}
 
-	fdt_setprop_string(fdt, offs, "compatible",
-			   "ti,dra7-secure-memory");
+	fdt_setprop_string(fdt, offs, "compatible", "ti,secure-memory");
 	fdt_setprop_string(fdt, offs, "status", "okay");
 	fdt_setprop(fdt, offs, "no-map", NULL, 0);
 	len = fdt_pack_reg(fdt, temp, sec_mem_start, sec_mem_size);
