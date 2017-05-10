@@ -15,15 +15,28 @@ static int curr_device = -1;
 
 static char *sprintf_speed(char *buf, ulong sz, uint ms)
 {
-	uint64_t kbytes_per_sec = ((sz >> 10) * 1000) / ms;
-	uint64_t mb_per_sec = kbytes_per_sec >> 10;
-	uint32_t remain = ((kbytes_per_sec - (mb_per_sec << 10)) * 100) >> 10;
-	if (ms && mb_per_sec)
+	uint64_t kbytes_per_sec;
+	uint64_t mb_per_sec;
+	uint32_t remain;
+
+	if (!ms)
+		goto out;
+
+	kbytes_per_sec = ((sz >> 10) * 1000) / ms;
+	mb_per_sec = kbytes_per_sec >> 10;
+	remain = ((kbytes_per_sec - (mb_per_sec << 10)) * 100) >> 10;
+
+	if (mb_per_sec)
 		sprintf(buf, "%llu.%02u MB/s", mb_per_sec, remain);
-	else if (ms && kbytes_per_sec)
+	else if (kbytes_per_sec)
 		sprintf(buf, "%llu KB/s", kbytes_per_sec);
 	else
-		strcpy(buf, "### MB/s");
+		goto out;
+
+	return buf;
+
+out:
+	strcpy(buf, "### MB/s");
 	return buf;
 }
 
