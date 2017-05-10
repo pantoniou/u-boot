@@ -28,7 +28,7 @@ DECLARE_GLOBAL_DATA_PTR;
  */
 int run_command(const char *cmd, int flag)
 {
-#ifndef CONFIG_HUSH_PARSER
+#if defined(CONFIG_SPL_BUILD) || !defined(CONFIG_HUSH_PARSER)
 	/*
 	 * cli_run_command can return 0 or 1 for success, so clean up
 	 * its result.

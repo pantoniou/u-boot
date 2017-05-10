@@ -15,6 +15,7 @@
 #include <ext4fs.h>
 #include <fat.h>
 #include <mmc.h>
+#include <cli.h>
 
 static unsigned char *dfu_file_buf;
 static long dfu_file_buf_len;
