@@ -63,6 +63,8 @@ struct omap_hsmmc_plat {
 	struct hsmmc *base_addr;
 	struct mmc mmc;
 	bool cd_inverted;
+	u8 controller_flags;
+
 };
 
 /*

@@ -36,7 +36,6 @@ static int mmc_set_timing(struct mmc *mmc, uint timing);
 static int mmc_set_bus_width(struct mmc *mmc, uint width);
 static int mmc_select_bus_width(struct mmc *mmc);
 static int mmc_set_signal_voltage(struct mmc *mmc, uint signal_voltage);
-static int mmc_set_vdd(struct mmc *mmc, bool enable);
 static void mmc_power_cycle(struct mmc *mmc);
 
 #if CONFIG_IS_ENABLED(MMC_TINY)
@@ -522,7 +521,8 @@ static int mmc_switch_voltage(struct mmc *mmc, int signal_voltage)
 	 * after the response of cmd11, but wait 1 ms to be sure
 	 */
 	udelay(1000);
-	if (mmc->cfg->ops->card_busy && !mmc->cfg->ops->card_busy(mmc))
+	err = mmc_card_busy(mmc);
+	if (err && err != -ENOSYS)
 		goto fail;
 
 	/*
@@ -546,7 +546,8 @@ static int mmc_switch_voltage(struct mmc *mmc, int signal_voltage)
 	 * Failure to switch is indicated by the card holding
 	 * dat[0:3] low
 	 */
-	if (mmc->cfg->ops->card_busy && mmc->cfg->ops->card_busy(mmc))
+	err = mmc_card_busy(mmc);
+	if (err && err != -ENOSYS)
 		goto fail;
 
 	return 0;

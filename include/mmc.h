@@ -446,7 +446,15 @@ struct dm_mmc_ops {
 	 * @opcode:	Command opcode to send
 	 * @return 0 if OK, -ve on error
 	 */
-	int (*execute_tuning)(struct mmc *mmc, uint opcode);
+	int (*execute_tuning)(struct udevice *dev, uint opcode);
+
+	/**
+	 * card_busy() - Check if card is busy
+	 *
+	 * @dev:	Device to check if busy
+	 * @return 0 if OK, -ve on error
+	 */
+	int (*card_busy)(struct udevice *dev);
 };
 
 #define mmc_get_ops(dev)        ((struct dm_mmc_ops *)(dev)->driver->ops)
@@ -458,13 +466,15 @@ int dm_mmc_set_vdd(struct udevice *dev, bool enable);
 int dm_mmc_get_cd(struct udevice *dev);
 int dm_mmc_get_wp(struct udevice *dev);
 int dm_mmc_execute_tuning(struct udevice *dev, uint opcode);
+int dm_mmc_card_busy(struct udevice *dev);
 
 /* Transition functions for compatibility */
 int mmc_set_ios(struct mmc *mmc);
 int mmc_set_vdd(struct mmc *mmc, bool enable);
 int mmc_getcd(struct mmc *mmc);
 int mmc_getwp(struct mmc *mmc);
-int mmc_execute_tuning(struct udevice *dev, uint opcode);
+int mmc_execute_tuning(struct mmc *mmc, uint opcode);
+int mmc_card_busy(struct mmc *mmc);
 
 #else
 struct mmc_ops {

@@ -62,6 +62,10 @@ __weak int spl_start_uboot(void)
  */
 __weak int dram_init_banksize(void)
 {
+#if defined(CONFIG_NR_DRAM_BANKS) && defined(CONFIG_SYS_SDRAM_BASE)
+	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
+	gd->bd->bi_dram[0].size = get_effective_memsize();
+#endif
 	return 0;
 }
 
@@ -364,14 +368,6 @@ static int reserve_mmu(void)
 	return 0;
 }
 
-__weak void dram_init_banksize(void)
-{
-#if defined(CONFIG_NR_DRAM_BANKS) && defined(CONFIG_SYS_SDRAM_BASE)
-	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
-	gd->bd->bi_dram[0].size = get_effective_memsize();
-#endif
-}
-
 #endif
 
 void board_init_r(gd_t *dummy1, ulong dummy2)
@@ -387,13 +383,14 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 
 	debug(">>spl:board_init_r()\n");
 	gd->bd = &bdata;
-#ifdef CONFIG_SPL_OS_BOOT
+#if defined(CONFIG_SPL_OS_BOOT) || \
+	(!(defined(CONFIG_SYS_ICACHE_OFF) && defined(CONFIG_SYS_DCACHE_OFF)) && \
+		defined(CONFIG_ARM))
 	dram_init_banksize();
 #endif
 
 #if !(defined(CONFIG_SYS_ICACHE_OFF) && defined(CONFIG_SYS_DCACHE_OFF)) && \
 		defined(CONFIG_ARM)
-	dram_init_banksize();
 	reserve_mmu();
 	enable_caches();
 #endif

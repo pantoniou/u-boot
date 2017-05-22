@@ -54,9 +54,7 @@ int mmc_set_ios(struct mmc *mmc)
 
 int dm_mmc_set_vdd(struct udevice *dev, bool enable)
 {
-	struct mmc *mmc = mmc_get_mmc_dev(dev);
 	struct dm_mmc_ops *ops = mmc_get_ops(dev);
-	int ret;
 
 	if (!ops->set_vdd)
 		return -ENOSYS;
@@ -98,9 +96,7 @@ int mmc_getcd(struct mmc *mmc)
 
 int dm_mmc_execute_tuning(struct udevice *dev, uint opcode)
 {
-	struct mmc *mmc = mmc_get_mmc_dev(dev);
 	struct dm_mmc_ops *ops = mmc_get_ops(dev);
-	int ret;
 
 	if (!ops->execute_tuning)
 		return -ENOSYS;
@@ -110,6 +106,20 @@ int dm_mmc_execute_tuning(struct udevice *dev, uint opcode)
 int mmc_execute_tuning(struct mmc *mmc, uint opcode)
 {
 	return dm_mmc_execute_tuning(mmc->dev, opcode);
+}
+
+int dm_mmc_card_busy(struct udevice *dev)
+{
+	struct dm_mmc_ops *ops = mmc_get_ops(dev);
+
+	if (!ops->card_busy)
+		return -ENOSYS;
+	return ops->card_busy(dev);
+}
+
+int mmc_card_busy(struct mmc *mmc)
+{
+	return dm_mmc_card_busy(mmc->dev);
 }
 
 #endif

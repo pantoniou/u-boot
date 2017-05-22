@@ -90,9 +90,6 @@ struct omap_hsmmc_data {
 	u8 controller_flags;
 	struct omap_hsmmc_adma_desc *adma_desc_table;
 	uint desc_slot;
-	/* when it exists it's copied (otherwise all 0s) */
-	uint hl_hwinfo;
-	int node;
 	char *version;
 	struct udevice *vmmc_supply;
 	struct udevice *vmmc_aux_supply;
@@ -331,7 +328,7 @@ static void omap_hsmmc_set_timing(struct mmc *mmc)
 {
 	u32 val;
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 	struct omap_hsmmc_pinctrl_state *pinctrl_state;
 
 	mmc_base = priv->base_addr;
@@ -405,7 +402,7 @@ static void omap_hsmmc_set_timing(struct mmc *mmc)
 static void omap_hsmmc_conf_bus_power(struct mmc *mmc, uint signal_voltage)
 {
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 	u32 val;
 
 	mmc_base = priv->base_addr;
@@ -433,7 +430,7 @@ static int omap_hsmmc_card_busy_low(struct mmc *mmc)
 	u32 val;
 	int i;
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
 	mmc_base = priv->base_addr;
 
@@ -460,7 +457,7 @@ static int omap_hsmmc_card_busy_high(struct mmc *mmc)
 	u32 val;
 	int i;
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
 	mmc_base = priv->base_addr;
 
@@ -486,12 +483,14 @@ ret:
 	return ret;
 }
 
-static int omap_hsmmc_card_busy(struct mmc *mmc)
+static int omap_hsmmc_card_busy(struct udevice *dev)
 {
+	struct omap_hsmmc_data *priv = dev_get_priv(dev);
+	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
+	struct mmc *mmc = upriv->mmc;
+	struct hsmmc *mmc_base;
 	int ret;
 	u32 val;
-	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
 
 	mmc_base = priv->base_addr;
 
@@ -511,11 +510,11 @@ static int omap_hsmmc_card_busy(struct mmc *mmc)
 	return ret;
 }
 
-#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
 static int omap_hsmmc_set_io_regulator(struct mmc *mmc, int uV)
 {
 	int ret;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
 	if (!priv->vmmc_aux_supply)
 		return 0;
@@ -541,7 +540,7 @@ static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 {
 	u32 val;
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
 	mmc_base = priv->base_addr;
 	priv->signal_voltage = mmc->signal_voltage;
@@ -593,7 +592,7 @@ static int omap_hsmmc_set_signal_voltage(struct mmc *mmc)
 static void omap_hsmmc_set_capabilities(struct mmc *mmc)
 {
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 	u32 val;
 
 	mmc_base = priv->base_addr;
@@ -619,8 +618,9 @@ static void omap_hsmmc_disable_tuning(struct mmc *mmc)
 {
 	int val;
 	struct hsmmc *mmc_base;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
-	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+	mmc_base = priv->base_addr;
 	val = readl(&mmc_base->ac12);
 	val &= ~(AC12_SCLK_SEL);
 	writel(val, &mmc_base->ac12);
@@ -635,8 +635,9 @@ static void omap_hsmmc_set_dll(struct mmc *mmc, int count)
 	int i;
 	u32 val;
 	struct hsmmc *mmc_base;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
-	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+	mmc_base = priv->base_addr;
 	val = readl(&mmc_base->dll);
 	val |= DLL_FORCE_VALUE;
 	val &= ~(DLL_FORCE_SR_C_MASK << DLL_FORCE_SR_C_SHIFT);
@@ -653,10 +654,12 @@ static void omap_hsmmc_set_dll(struct mmc *mmc, int count)
 	writel(val, &mmc_base->dll);
 }
 
-static int omap_hsmmc_execute_tuning(struct mmc *mmc, uint opcode)
+static int omap_hsmmc_execute_tuning(struct udevice *dev, uint opcode)
 {
-	struct hsmmc *mmc_base;
-
+	struct omap_hsmmc_data *priv = dev_get_priv(dev);
+	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
+	struct mmc *mmc = upriv->mmc;
+	struct hsmmc *mmc_base = priv->base_addr;
 	u32 val;
 	u8 cur_match, prev_match = 0;
 	int ret;
@@ -667,8 +670,6 @@ static int omap_hsmmc_execute_tuning(struct mmc *mmc, uint opcode)
 	/* clock tuning is not needed for upto 52MHz */
 	if (mmc->clock <= 52000000)
 		return 0;
-
-	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
 
 	val = readl(&mmc_base->ac12);
 	val |= AC12_V1V8_SIGEN;
@@ -731,10 +732,10 @@ tuning_error:
 	return ret;
 }
 
-#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
-static int omap_hsmmc_set_vdd(struct mmc *mmc, bool enable)
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
+static int omap_hsmmc_set_vdd(struct udevice *dev, bool enable)
 {
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = dev_get_priv(dev);
 	struct hsmmc *mmc_base = priv->base_addr;
 
 	if (enable) {
@@ -753,8 +754,9 @@ static void mmc_enable_irq(struct mmc *mmc, struct mmc_cmd *cmd)
 {
 	u32 irq_mask = INT_EN_MASK;
 	struct hsmmc *mmc_base;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
-	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+	mmc_base = priv->base_addr;
 
 	/*
 	 * TODO: Errata i802 indicates only DCRC interrupts can occur during
@@ -776,9 +778,6 @@ static int omap_hsmmc_init_setup(struct mmc *mmc)
 	unsigned int reg_val;
 	unsigned int dsor;
 	ulong start;
-#ifdef CONFIG_DM_MMC
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
-#endif
 
 	mmc_base = priv->base_addr;
 	mmc_board_init(mmc);
@@ -805,8 +804,6 @@ static int omap_hsmmc_init_setup(struct mmc *mmc)
 #ifdef CONFIG_DM_MMC
 	omap_hsmmc_set_capabilities(mmc);
 	omap_hsmmc_conf_bus_power(mmc, priv->iov);
-	if (priv->hl_hwinfo & MADMA_EN)
-		priv->controller_flags |= OMAP_HSMMC_USE_ADMA;
 #else
 	writel(DTW_1_BITMODE | SDBP_PWROFF | SDVS_3V0, &mmc_base->hctl);
 	writel(readl(&mmc_base->capa) | VS30_3V0SUP | VS18_1V8SUP,
@@ -894,7 +891,7 @@ static void mmc_reset_controller_fsm(struct hsmmc *mmc_base, u32 bit)
 #ifdef CONFIG_DM_MMC
 static int omap_hsmmc_adma_desc(struct mmc *mmc, char *buf, u16 len, bool end)
 {
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 	struct omap_hsmmc_adma_desc *desc;
 	u8 attr;
 
@@ -918,7 +915,7 @@ static int omap_hsmmc_prepare_adma_table(struct mmc *mmc, struct mmc_data *data)
 {
 	uint total_len = data->blocksize * data->blocks;
 	uint desc_count = DIV_ROUND_UP(total_len, ADMA_MAX_LEN);
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 	int i = desc_count;
 	char *buf;
 
@@ -951,11 +948,11 @@ static int omap_hsmmc_prepare_adma_table(struct mmc *mmc, struct mmc_data *data)
 static void omap_hsmmc_prepare_data(struct mmc *mmc, struct mmc_data *data)
 {
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 	u32 val;
 	char *buf;
 
-	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+	mmc_base = priv->base_addr;
 	omap_hsmmc_prepare_adma_table(mmc, data);
 
 	if (data->flags & MMC_DATA_READ)
@@ -985,10 +982,10 @@ static void omap_hsmmc_prepare_data(struct mmc *mmc, struct mmc_data *data)
 static void omap_hsmmc_dma_cleanup(struct mmc *mmc)
 {
 	struct hsmmc *mmc_base;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 	u32 val;
 
-	mmc_base = ((struct omap_hsmmc_data *)mmc->priv)->base_addr;
+	mmc_base = priv->base_addr;
 
 	val = readl(&mmc_base->con);
 	val &= ~DMA_MASTER;
@@ -1012,12 +1009,13 @@ static int omap_hsmmc_send_cmd(struct udevice *dev, struct mmc_cmd *cmd,
 			struct mmc_data *data)
 {
 	struct omap_hsmmc_data *priv = dev_get_priv(dev);
+	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
+	struct mmc *mmc = upriv->mmc;
 #endif
 	struct hsmmc *mmc_base;
 	unsigned int flags, mmc_stat;
 	ulong start;
 #ifdef CONFIG_DM_MMC
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
 	priv->last_cmd = cmd->cmdidx;
 #endif
 
@@ -1379,7 +1377,7 @@ static int omap_hsmmc_set_ios(struct udevice *dev)
 	if (priv->bus_width != mmc->bus_width)
 		omap_hsmmc_set_bus_width(mmc);
 
-	if (priv_data->clock != mmc->clock)
+	if (priv->clock != mmc->clock)
 		omap_hsmmc_set_clock(mmc);
 
 	if (mmc->clk_disable)
@@ -1388,10 +1386,10 @@ static int omap_hsmmc_set_ios(struct udevice *dev)
 		omap_hsmmc_start_clock(mmc_base);
 
 #if defined(CONFIG_DM_MMC) && defined(CONFIG_IODELAY_RECALIBRATION)
-	if (priv_data->timing != mmc->timing)
+	if (priv->timing != mmc->timing)
 		omap_hsmmc_set_timing(mmc);
 #endif
-	if (priv_data->signal_voltage != mmc->signal_voltage)
+	if (priv->signal_voltage != mmc->signal_voltage)
 		ret = omap_hsmmc_set_signal_voltage(mmc);
 
 	return ret;
@@ -1464,6 +1462,11 @@ static const struct dm_mmc_ops omap_hsmmc_ops = {
 	.get_cd		= omap_hsmmc_getcd,
 	.get_wp		= omap_hsmmc_getwp,
 #endif
+	.execute_tuning = omap_hsmmc_execute_tuning,
+	.card_busy	= omap_hsmmc_card_busy,
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
+	.set_vdd	= omap_hsmmc_set_vdd,
+#endif
 };
 #else
 static const struct mmc_ops omap_hsmmc_ops = {
@@ -1473,13 +1476,6 @@ static const struct mmc_ops omap_hsmmc_ops = {
 #ifdef OMAP_HSMMC_USE_GPIO
 	.getcd		= omap_hsmmc_getcd,
 	.getwp		= omap_hsmmc_getwp,
-#endif
-#ifdef CONFIG_DM_MMC
-	.execute_tuning = omap_hsmmc_execute_tuning,
-	.card_busy = omap_hsmmc_card_busy,
-#if CONFIG_IS_ENABLED(DM_REGULATOR) && defined(CONFIG_DM_MMC)
-	.set_vdd	= omap_hsmmc_set_vdd,
-#endif
 #endif
 };
 #endif
@@ -1589,7 +1585,7 @@ __weak struct omap_hsmmc_pinctrl_state *platform_fixup_get_pinctrl_by_mode
 static struct omap_hsmmc_pinctrl_state *
 omap_hsmmc_get_pinctrl_by_mode(struct mmc *mmc, char *mode)
 {
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
 
 	return platform_fixup_get_pinctrl_by_mode(priv->base_addr, mode);
 }
@@ -1600,7 +1596,7 @@ omap_hsmmc_get_pad_conf_entry(const fdt32_t *pinctrl, int count)
 	int index = 0;
 	struct pad_conf_entry *padconf;
 
-	padconf = (struct pad_conf_entry *)malloc(sizeof(*padconf) * count);
+	padconf = malloc(sizeof(*padconf) * count);
 	if (!padconf) {
 		printf("failed to allocate memory\n");
 		return 0;
@@ -1621,7 +1617,7 @@ omap_hsmmc_get_iodelay_cfg_entry(const fdt32_t *pinctrl, int count)
 	int index = 0;
 	struct iodelay_cfg_entry *iodelay;
 
-	iodelay = (struct iodelay_cfg_entry *)malloc(sizeof(*iodelay) * count);
+	iodelay = malloc(sizeof(*iodelay) * count);
 	if (!iodelay) {
 		printf("failed to allocate memory\n");
 		return 0;
@@ -1665,8 +1661,7 @@ static uint32_t omap_hsmmc_get_pad_conf_phandle(struct mmc *mmc,
 {
 	const void *fdt = gd->fdt_blob;
 	const __be32 *phandle;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
-	int node = priv->node;
+	int node = dev_of_offset(mmc->dev);
 
 	phandle = fdt_getprop(fdt, node, prop_name, NULL);
 	if (!phandle) {
@@ -1682,10 +1677,9 @@ static uint32_t omap_hsmmc_get_iodelay_phandle(struct mmc *mmc,
 {
 	const void *fdt = gd->fdt_blob;
 	const __be32 *phandle;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
 	int len;
 	int count;
-	int node = priv->node;
+	int node = dev_of_offset(mmc->dev);
 
 	phandle = fdt_getprop(fdt, node, prop_name, &len);
 	if (!phandle) {
@@ -1766,13 +1760,11 @@ omap_hsmmc_get_pinctrl_by_mode(struct mmc *mmc, char *mode)
 	int npads = 0;
 	int niodelays = 0;
 	const void *fdt = gd->fdt_blob;
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
-	int node = priv->node;
+	int node = dev_of_offset(mmc->dev);
 	char prop_name[11];
 	struct omap_hsmmc_pinctrl_state *pinctrl_state;
 
-	pinctrl_state = (struct omap_hsmmc_pinctrl_state *)
-			 malloc(sizeof(*pinctrl_state));
+	pinctrl_state = malloc(sizeof(*pinctrl_state));
 	if (!pinctrl_state) {
 		printf("%s: failed to allocate memory\n",
 		       fdt_get_name(fdt, node, NULL));
@@ -1837,8 +1829,8 @@ err_pinctrl_state:
 
 static int omap_hsmmc_get_pinctrl_state(struct mmc *mmc)
 {
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
-	struct mmc_config *cfg = &priv->cfg;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
+	struct mmc_config *cfg = omap_hsmmc_get_cfg(mmc);
 	struct omap_hsmmc_pinctrl_state *default_pinctrl;
 
 	if (!(priv->controller_flags & OMAP_HSMMC_REQUIRE_IODELAY))
@@ -1875,20 +1867,14 @@ static int omap_hsmmc_ofdata_to_platdata(struct udevice *dev)
 	const void *fdt = gd->fdt_blob;
 	int node = dev_of_offset(dev);
 	int ret;
+	void *real_base_addr;
+	u32 val;
 
 	/* NOTE: the base address is offset'ed but the mapping contains all */
-	plat->base_addr = map_physmem(dev_get_addr(dev),
+	real_base_addr = map_physmem(dev_get_addr(dev),
 				      sizeof(struct hsmmc) + data->reg_offset,
-				      MAP_NOCACHE) + data->reg_offset;
-
-	/* and read hwinfo if available */
-	if (!data->reg_offset)
-		plat->hl_hwinfo = 0;
-	else
-		plat->hl_hwinfo = readl(plat->base_addr -
-					data->reg_offset + HL_HWINFO_OFFSET);
-	priv->node = node;
-	cfg = &priv->cfg;
+				      MAP_NOCACHE);
+	plat->base_addr = real_base_addr + data->reg_offset;
 
 	ret = mmc_of_parse(fdt, node, cfg);
 	if (ret < 0)
@@ -1898,10 +1884,18 @@ static int omap_hsmmc_ofdata_to_platdata(struct udevice *dev)
 	cfg->f_min = 400000;
 	cfg->voltages = MMC_VDD_32_33 | MMC_VDD_33_34 | MMC_VDD_165_195;
 	cfg->b_max = CONFIG_SYS_MMC_MAX_BLK_COUNT;
+
+	plat->controller_flags = data->controller_flags;
 	if (fdtdec_get_bool(fdt, node, "ti,dual-volt"))
-		priv->controller_flags |= OMAP_HSMMC_SUPPORTS_DUAL_VOLT;
+		plat->controller_flags |= OMAP_HSMMC_SUPPORTS_DUAL_VOLT;
 	if (fdtdec_get_bool(fdt, node, "no-1-8-v"))
-		priv->controller_flags |= OMAP_HSMMC_NO_1_8_V;
+		plat->controller_flags |= OMAP_HSMMC_NO_1_8_V;
+
+	if (data->reg_offset) {
+		val = readl(real_base_addr + HL_HWINFO_OFFSET);
+		if ((val & MADMA_EN) && !fdtdec_get_bool(fdt, node, "no-dma"))
+			plat->controller_flags |= OMAP_HSMMC_USE_ADMA;
+	}
 
 #ifdef OMAP_HSMMC_USE_GPIO
 	plat->cd_inverted = fdtdec_get_bool(fdt, node, "cd-inverted");
@@ -1928,8 +1922,8 @@ __weak int platform_fixup_disable_uhs_mode(void)
 
 static int omap_hsmmc_platform_fixup(struct mmc *mmc)
 {
-	struct omap_hsmmc_data *priv = (struct omap_hsmmc_data *)mmc->priv;
-	struct mmc_config *cfg = &priv->cfg;
+	struct omap_hsmmc_data *priv = omap_hsmmc_get_data(mmc);
+	struct mmc_config *cfg = omap_hsmmc_get_cfg(mmc);
 
 	priv->version = NULL;
 
@@ -1951,7 +1945,6 @@ static int omap_hsmmc_probe(struct udevice *dev)
 	struct mmc *mmc;
 #ifdef CONFIG_IODELAY_RECALIBRATION
 	int ret;
-	struct omap2_mmc_platform_config *data;
 #endif
 
 	cfg->name = "OMAP SD/MMC";
@@ -1959,6 +1952,7 @@ static int omap_hsmmc_probe(struct udevice *dev)
 #ifdef OMAP_HSMMC_USE_GPIO
 	priv->cd_inverted = plat->cd_inverted;
 #endif
+	priv->controller_flags = plat->controller_flags;
 
 #ifdef CONFIG_BLK
 	mmc = &plat->mmc;
@@ -1981,10 +1975,6 @@ static int omap_hsmmc_probe(struct udevice *dev)
 #endif
 
 #ifdef CONFIG_IODELAY_RECALIBRATION
-	data  = (struct omap2_mmc_platform_config *)dev_get_driver_data(dev);
-	if (data && (data->controller_flags & OMAP_HSMMC_REQUIRE_IODELAY))
-		priv->controller_flags |= OMAP_HSMMC_REQUIRE_IODELAY;
-
 	ret = omap_hsmmc_get_pinctrl_state(mmc);
 	if (ret < 0) {
 		priv->controller_flags &= ~OMAP_HSMMC_REQUIRE_IODELAY;
