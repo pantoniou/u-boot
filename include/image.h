@@ -592,6 +592,10 @@ int boot_get_loadable(int argc, char * const argv[], bootm_headers_t *images,
 int boot_get_setup_fit(bootm_headers_t *images, uint8_t arch,
 		       ulong *setup_start, ulong *setup_len);
 
+int boot_get_fdt_fit(bootm_headers_t *images, ulong addr,
+		   const char **fit_unamep, const char **fit_uname_configp,
+		   int arch, ulong *datap, ulong *lenp);
+
 /**
  * fit_image_load() - load an image from a FIT
  *
@@ -657,6 +661,8 @@ int fit_image_load(bootm_headers_t *images, ulong addr,
  */
 int fit_get_node_from_config(bootm_headers_t *images, const char *prop_name,
 			ulong addr);
+int fit_get_node_from_config_index(bootm_headers_t *images, const char *prop_name,
+			ulong addr, int index);
 
 int boot_get_fdt(int flag, int argc, char * const argv[], uint8_t arch,
 		 bootm_headers_t *images,
@@ -986,6 +992,10 @@ int fit_check_format(const void *fit);
 int fit_conf_find_compat(const void *fit, const void *fdt);
 int fit_conf_get_node(const void *fit, const char *conf_uname);
 
+int fit_conf_get_prop_node_count(const void *fit, int noffset,
+		const char *prop_name);
+int fit_conf_get_prop_node_index(const void *fit, int noffset,
+		const char *prop_name, int index);
 /**
  * fit_conf_get_prop_node() - Get node refered to by a configuration
  * @fit:	FIT to check
