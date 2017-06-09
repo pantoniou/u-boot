@@ -100,6 +100,9 @@
 
 #define FDT_ERR_MAX		18
 
+/* Maximum path size of a node (similar to PATH_MAX in *nix) */
+#define FDT_PATH_MAX	4096
+
 /**********************************************************************/
 /* Low-level functions (you probably don't need these)                */
 /**********************************************************************/
