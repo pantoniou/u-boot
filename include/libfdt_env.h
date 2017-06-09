@@ -27,6 +27,7 @@ typedef __be64 fdt64_t;
 #include <vsprintf.h>
 
 #define strtoul(cp, endp, base)	simple_strtoul(cp, endp, base)
+#include <malloc.h>
 #endif
 
 /* adding a ramdisk needs 0x44 bytes in version 2008.10 */
